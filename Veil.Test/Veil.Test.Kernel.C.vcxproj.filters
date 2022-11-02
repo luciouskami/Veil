@@ -7,11 +7,11 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Veil.Test.Main.cpp">
+    <ClCompile Include="Veil.Test.Main.c">
       <Filter>Source</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Inf Include="Veil.inf" />
+    <Inf Include="Veil.C.inf" />
   </ItemGroup>
 </Project>

@@ -32,6 +32,7 @@
  */
 
 #pragma once
+#include <minwindef.h>
 
 // Warnings which disabled for compiling
 #if _MSC_VER >= 1200
@@ -99,30 +100,73 @@ VEIL_BEGIN()
         ((((ULONG_PTR) (_pointer)) & ((_alignment) - 1)) == 0)
 #endif
 
-#ifndef _KERNEL_MODE
-typedef struct _PEB* PPEB;  // ntddk.h
-typedef LONG KPRIORITY;     // wdm.h
+//
+// RC Resource
+//
 
-typedef struct _IO_STATUS_BLOCK
-{
-    union
-    {
-        NTSTATUS Status;
-        PVOID Pointer;
-    };
-    ULONG_PTR Information;
-} IO_STATUS_BLOCK, * PIO_STATUS_BLOCK;
+#ifdef _KERNEL_MODE
 
-typedef VOID(NTAPI* PIO_APC_ROUTINE)(
-    _In_ PVOID ApcContext,
-    _In_ PIO_STATUS_BLOCK IoStatusBlock,
-    _In_ ULONG Reserved
-    );
-#else
-typedef int BOOL;
-#endif // !_KERNEL_MODE
+#define IS_INTRESOURCE(_r)  ((((ULONG_PTR)(_r)) >> 16) == 0)
+#define MAKEINTRESOURCEA(i) ((LPSTR)((ULONG_PTR)((WORD)(i))))
+#define MAKEINTRESOURCEW(i) ((LPWSTR)((ULONG_PTR)((WORD)(i))))
 
-typedef USHORT RTL_ATOM, * PRTL_ATOM;
+#define MAKEINTRESOURCE     MAKEINTRESOURCEW
+
+#ifndef NORESOURCE
+
+/*
+ * Predefined Resource Types
+ */
+#define RT_CURSOR           MAKEINTRESOURCE(1)
+#define RT_BITMAP           MAKEINTRESOURCE(2)
+#define RT_ICON             MAKEINTRESOURCE(3)
+#define RT_MENU             MAKEINTRESOURCE(4)
+#define RT_DIALOG           MAKEINTRESOURCE(5)
+#define RT_STRING           MAKEINTRESOURCE(6)
+#define RT_FONTDIR          MAKEINTRESOURCE(7)
+#define RT_FONT             MAKEINTRESOURCE(8)
+#define RT_ACCELERATOR      MAKEINTRESOURCE(9)
+#define RT_RCDATA           MAKEINTRESOURCE(10)
+#define RT_MESSAGETABLE     MAKEINTRESOURCE(11)
+
+#define DIFFERENCE     11
+#define RT_GROUP_CURSOR MAKEINTRESOURCE((ULONG_PTR)(RT_CURSOR) + DIFFERENCE)
+#define RT_GROUP_ICON   MAKEINTRESOURCE((ULONG_PTR)(RT_ICON) + DIFFERENCE)
+#define RT_VERSION      MAKEINTRESOURCE(16)
+#define RT_DLGINCLUDE   MAKEINTRESOURCE(17)
+#if(WINVER >= 0x0400)
+#define RT_PLUGPLAY     MAKEINTRESOURCE(19)
+#define RT_VXD          MAKEINTRESOURCE(20)
+#define RT_ANICURSOR    MAKEINTRESOURCE(21)
+#define RT_ANIICON      MAKEINTRESOURCE(22)
+#endif /* WINVER >= 0x0400 */
+#define RT_HTML         MAKEINTRESOURCE(23)
+#ifdef RC_INVOKED
+#define RT_MANIFEST                        24
+#define CREATEPROCESS_MANIFEST_RESOURCE_ID  1
+#define ISOLATIONAWARE_MANIFEST_RESOURCE_ID 2
+#define ISOLATIONAWARE_NOSTATICIMPORT_MANIFEST_RESOURCE_ID 3
+#define ISOLATIONPOLICY_MANIFEST_RESOURCE_ID 4
+#define ISOLATIONPOLICY_BROWSER_MANIFEST_RESOURCE_ID 5
+#define MINIMUM_RESERVED_MANIFEST_RESOURCE_ID 1   /* inclusive */
+#define MAXIMUM_RESERVED_MANIFEST_RESOURCE_ID 16  /* inclusive */
+#else  /* RC_INVOKED */
+#define RT_MANIFEST                        MAKEINTRESOURCE(24)
+#define CREATEPROCESS_MANIFEST_RESOURCE_ID MAKEINTRESOURCE( 1)
+#define ISOLATIONAWARE_MANIFEST_RESOURCE_ID MAKEINTRESOURCE(2)
+#define ISOLATIONAWARE_NOSTATICIMPORT_MANIFEST_RESOURCE_ID MAKEINTRESOURCE(3)
+#define ISOLATIONPOLICY_MANIFEST_RESOURCE_ID MAKEINTRESOURCE(4)
+#define ISOLATIONPOLICY_BROWSER_MANIFEST_RESOURCE_ID MAKEINTRESOURCE(5)
+#define MINIMUM_RESERVED_MANIFEST_RESOURCE_ID MAKEINTRESOURCE( 1 /*inclusive*/)
+#define MAXIMUM_RESERVED_MANIFEST_RESOURCE_ID MAKEINTRESOURCE(16 /*inclusive*/)
+#endif /* RC_INVOKED */
+
+#endif /* !NORESOURCE */
+#endif // if _KERNEL_MODE
+
+//
+// ntdef
+//
 
 #ifndef _NTDEF_
 #define _NTDEF_
@@ -302,6 +346,33 @@ typedef long SECURITY_STATUS;
 //
 
 typedef LARGE_INTEGER PHYSICAL_ADDRESS, * PPHYSICAL_ADDRESS;
+
+//
+// Kernel
+//
+
+#ifndef _KERNEL_MODE
+typedef struct _PEB* PPEB;  // ntddk.h
+typedef LONG KPRIORITY;     // wdm.h
+
+typedef struct _IO_STATUS_BLOCK
+{
+    union
+    {
+        NTSTATUS Status;
+        PVOID Pointer;
+    };
+    ULONG_PTR Information;
+} IO_STATUS_BLOCK, * PIO_STATUS_BLOCK;
+
+typedef VOID(NTAPI* PIO_APC_ROUTINE)(
+    _In_ PVOID ApcContext,
+    _In_ PIO_STATUS_BLOCK IoStatusBlock,
+    _In_ ULONG Reserved
+    );
+#else
+typedef int BOOL;
+#endif // !_KERNEL_MODE
 
 //
 // Event type
@@ -655,11 +726,19 @@ typedef enum _SUITE_TYPE
 
 #endif // _NTDEF
 
+#if defined(_KERNEL_MODE) && (WDK_NTDDI_VERSION <= NTDDI_WIN10_19H1)
+typedef STRING  UTF8_STRING;
+typedef PSTRING PUTF8_STRING;
+#endif
+
+typedef USHORT RTL_ATOM, * PRTL_ATOM;
+
+#ifdef _KERNEL_MODE
+
 //
 // Critical Section
 //
 
-#ifdef _KERNEL_MODE
 typedef struct _RTL_CRITICAL_SECTION_DEBUG
 {
     UINT16  Type;
@@ -727,6 +806,7 @@ typedef struct _RTL_CONDITION_VARIABLE
 //
 
 #ifndef _KERNEL_MODE
+
 typedef struct _CLIENT_ID
 {
     HANDLE UniqueProcess;
@@ -741,6 +821,7 @@ typedef struct _KSYSTEM_TIME
     LONG High2Time;
 } KSYSTEM_TIME, * PKSYSTEM_TIME;
 #include <poppack.h>
+
 #endif // _KERNEL_MODE
 
 //

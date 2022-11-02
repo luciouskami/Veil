@@ -286,7 +286,7 @@ typedef struct _PEB
     ULONG ImageSubsystem;
     ULONG ImageSubsystemMajorVersion;
     ULONG ImageSubsystemMinorVersion;
-    ULONG_PTR ActiveProcessAffinityMask;
+    KAFFINITY ActiveProcessAffinityMask;
     GDI_HANDLE_BUFFER GdiHandleBuffer;
     PVOID PostProcessInitRoutine;
 
@@ -309,13 +309,17 @@ typedef struct _PEB
 
     SIZE_T MinimumStackCommit;
 
-    PVOID SparePointers[4]; // 19H1 (previously FlsCallback to FlsHighIndex)
-    ULONG SpareUlongs[5]; // 19H1
-    //PVOID* FlsCallback;
-    //LIST_ENTRY FlsListHead;
-    //PVOID FlsBitmap;
-    //ULONG FlsBitmapBits[FLS_MAXIMUM_AVAILABLE / (sizeof(ULONG) * 8)];
-    //ULONG FlsHighIndex;
+    PVOID SparePointers[2]; // 19H1 (previously FlsCallback to FlsHighIndex)
+    PVOID PatchLoaderData;
+    PVOID ChpeV2ProcessInfo; // _CHPEV2_PROCESS_INFO
+
+    ULONG AppModelFeatureState;
+    ULONG SpareUlongs[2];
+
+    USHORT ActiveCodePage;
+    USHORT OemCodePage;
+    USHORT UseCaseMapping;
+    USHORT UnusedNlsField;
 
     PVOID WerRegistrationData;
     PVOID WerShipAssertPtr;
@@ -359,18 +363,22 @@ typedef struct _PEB
         };
     };
     ULONG NtGlobalFlag2;
+    ULONGLONG ExtendedFeatureDisableMask; // since WIN11
+
 } PEB, * PPEB;
 
 #ifdef _WIN64
 C_ASSERT(FIELD_OFFSET(PEB, SessionId) == 0x2C0);
 //C_ASSERT(sizeof(PEB) == 0x7B0); // REDSTONE3
 //C_ASSERT(sizeof(PEB) == 0x7B8); // REDSTONE4
-C_ASSERT(sizeof(PEB) == 0x7C8); // REDSTONE5 // 19H1
+//C_ASSERT(sizeof(PEB) == 0x7C8); // REDSTONE5 // 19H1
+C_ASSERT(sizeof(PEB) == 0x7d0); // WIN11
 #else
 C_ASSERT(FIELD_OFFSET(PEB, SessionId) == 0x1D4);
 //C_ASSERT(sizeof(PEB) == 0x468); // REDSTONE3
 //C_ASSERT(sizeof(PEB) == 0x470); // REDSTONE4
-C_ASSERT(sizeof(PEB) == 0x480); // REDSTONE5 // 19H1
+//C_ASSERT(sizeof(PEB) == 0x480); // REDSTONE5 // 19H1
+C_ASSERT(sizeof(PEB) == 0x488); // WIN11
 #endif
 
 #define GDI_BATCH_BUFFER_SIZE 310
@@ -590,7 +598,7 @@ typedef enum _PROCESSINFOCLASS
     ProcessBasePriority, // s: KPRIORITY
     ProcessRaisePriority, // s: ULONG
     ProcessDebugPort, // q: HANDLE
-    ProcessExceptionPort, // s: PROCESS_EXCEPTION_PORT
+    ProcessExceptionPort, // s: PROCESS_EXCEPTION_PORT (requires SeTcbPrivilege)
     ProcessAccessToken, // s: PROCESS_ACCESS_TOKEN
     ProcessLdtInformation, // qs: PROCESS_LDT_INFORMATION // 10
     ProcessLdtSize, // s: PROCESS_LDT_SIZE
@@ -603,7 +611,7 @@ typedef enum _PROCESSINFOCLASS
     ProcessPriorityClass, // qs: PROCESS_PRIORITY_CLASS
     ProcessWx86Information, // qs: ULONG (requires SeTcbPrivilege) (VdmAllowed)
     ProcessHandleCount, // q: ULONG, PROCESS_HANDLE_INFORMATION // 20
-    ProcessAffinityMask, // s: KAFFINITY
+    ProcessAffinityMask, // (q >WIN7)s: KAFFINITY, qs: GROUP_AFFINITY
     ProcessPriorityBoost, // qs: ULONG
     ProcessDeviceMap, // qs: PROCESS_DEVICEMAP_INFORMATION, PROCESS_DEVICEMAP_INFORMATION_EX
     ProcessSessionInformation, // q: PROCESS_SESSION_INFORMATION
@@ -621,7 +629,7 @@ typedef enum _PROCESSINFOCLASS
     ProcessCookie, // q: ULONG
     ProcessImageInformation, // q: SECTION_IMAGE_INFORMATION
     ProcessCycleTime, // q: PROCESS_CYCLE_TIME_INFORMATION // since VISTA
-    ProcessPagePriority, // q: PAGE_PRIORITY_INFORMATION
+    ProcessPagePriority, // qs: PAGE_PRIORITY_INFORMATION
     ProcessInstrumentationCallback, // s: PVOID or PROCESS_INSTRUMENTATION_CALLBACK_INFORMATION // 40
     ProcessThreadStackAllocation, // s: PROCESS_STACK_ALLOCATION_INFORMATION, PROCESS_STACK_ALLOCATION_INFORMATION_EX
     ProcessWorkingSetWatchEx, // q: PROCESS_WS_WATCH_INFORMATION_EX[]
@@ -648,8 +656,8 @@ typedef enum _PROCESSINFOCLASS
     ProcessFaultInformation, // PROCESS_FAULT_INFORMATION
     ProcessTelemetryIdInformation, // q: PROCESS_TELEMETRY_ID_INFORMATION
     ProcessCommitReleaseInformation, // PROCESS_COMMIT_RELEASE_INFORMATION
-    ProcessDefaultCpuSetsInformation,
-    ProcessAllowedCpuSetsInformation,
+    ProcessDefaultCpuSetsInformation, // SYSTEM_CPU_SET_INFORMATION[5]
+    ProcessAllowedCpuSetsInformation, // SYSTEM_CPU_SET_INFORMATION[5]
     ProcessSubsystemProcess,
     ProcessJobMemoryInformation, // q: PROCESS_JOB_MEMORY_INFO
     ProcessInPrivate, // s: void // ETW // since THRESHOLD2 // 70
@@ -690,10 +698,10 @@ typedef enum _PROCESSINFOCLASS
     ProcessEnableOptionalXStateFeatures,
     ProcessAltPrefetchParam, // since 22H1
     ProcessAssignCpuPartitions,
-    ProcessPriorityClassEx,
+    ProcessPriorityClassEx, // s: PROCESS_PRIORITY_CLASS_EX
     ProcessMembershipInformation,
-    ProcessEffectiveIoPriority,
-    ProcessEffectivePagePriority,
+    ProcessEffectiveIoPriority, // q: IO_PRIORITY_HINT
+    ProcessEffectivePagePriority, // q: ULONG
     MaxProcessInfoClass
 } PROCESSINFOCLASS;
 
@@ -706,7 +714,7 @@ typedef enum _THREADINFOCLASS
     ThreadBasicInformation, // q: THREAD_BASIC_INFORMATION
     ThreadTimes, // q: KERNEL_USER_TIMES
     ThreadPriority, // s: KPRIORITY (requires SeIncreaseBasePriorityPrivilege)
-    ThreadBasePriority, // s: LONG
+    ThreadBasePriority, // s: KPRIORITY
     ThreadAffinityMask, // s: KAFFINITY
     ThreadImpersonationToken, // s: HANDLE
     ThreadDescriptorTableEntry, // q: DESCRIPTOR_TABLE_ENTRY (or WOW64_DESCRIPTOR_TABLE_ENTRY)
@@ -727,16 +735,16 @@ typedef enum _THREADINFOCLASS
     ThreadLastSystemCall, // q: THREAD_LAST_SYSCALL_INFORMATION
     ThreadIoPriority, // qs: IO_PRIORITY_HINT (requires SeIncreaseBasePriorityPrivilege)
     ThreadCycleTime, // q: THREAD_CYCLE_TIME_INFORMATION
-    ThreadPagePriority, // q: ULONG
+    ThreadPagePriority, // qs: PAGE_PRIORITY_INFORMATION
     ThreadActualBasePriority, // s: LONG (requires SeIncreaseBasePriorityPrivilege)
     ThreadTebInformation, // q: THREAD_TEB_INFORMATION (requires THREAD_GET_CONTEXT + THREAD_SET_CONTEXT)
     ThreadCSwitchMon,
     ThreadCSwitchPmu,
     ThreadWow64Context, // qs: WOW64_CONTEXT
-    ThreadGroupInformation, // q: GROUP_AFFINITY // 30
+    ThreadGroupInformation, // qs: GROUP_AFFINITY // 30
     ThreadUmsInformation, // q: THREAD_UMS_INFORMATION
     ThreadCounterProfiling, // q: BOOLEAN; s: THREAD_PROFILING_INFORMATION?
-    ThreadIdealProcessorEx, // q: PROCESSOR_NUMBER
+    ThreadIdealProcessorEx, // qs: PROCESSOR_NUMBER; s: previous PROCESSOR_NUMBER on return
     ThreadCpuAccountingInformation, // q: BOOLEAN; s: HANDLE (NtOpenSession) // NtCurrentThread // since WIN8
     ThreadSuspendCount, // q: ULONG // since WINBLUE
     ThreadHeterogeneousCpuPolicy, // q: KHETERO_CPU_POLICY // since THRESHOLD
@@ -757,8 +765,8 @@ typedef enum _THREADINFOCLASS
     ThreadCreateStateChange, // since WIN11
     ThreadApplyStateChange,
     ThreadStrongerBadHandleChecks, // since 22H1
-    ThreadEffectiveIoPriority,
-    ThreadEffectivePagePriority,
+    ThreadEffectiveIoPriority, // q: IO_PRIORITY_HINT
+    ThreadEffectivePagePriority, // q: ULONG
     MaxThreadInfoClass
 } THREADINFOCLASS;
 #endif // !_KERNEL_MODE
@@ -778,7 +786,7 @@ typedef struct _PROCESS_BASIC_INFORMATION
 {
     NTSTATUS ExitStatus;
     PPEB PebBaseAddress;
-    ULONG_PTR AffinityMask;
+    KAFFINITY AffinityMask;
     KPRIORITY BasePriority;
     HANDLE UniqueProcessId;
     HANDLE InheritedFromUniqueProcessId;
@@ -958,6 +966,21 @@ typedef struct _PROCESS_PRIORITY_CLASS
     BOOLEAN Foreground;
     UCHAR PriorityClass;
 } PROCESS_PRIORITY_CLASS, * PPROCESS_PRIORITY_CLASS;
+
+typedef struct _PROCESS_PRIORITY_CLASS_EX
+{
+    union
+    {
+        struct
+        {
+            USHORT ForegroundValid : 1;
+            USHORT PriorityClassValid : 1;
+        };
+        USHORT AllFlags;
+    };
+    UCHAR PriorityClass;
+    BOOLEAN Foreground;
+} PROCESS_PRIORITY_CLASS_EX, * PPROCESS_PRIORITY_CLASS_EX;
 
 typedef struct _PROCESS_FOREGROUND_BACKGROUND
 {
@@ -1175,16 +1198,32 @@ typedef struct _PROCESS_MITIGATION_POLICY_INFORMATION
         PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY SystemCallDisablePolicy;
         PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY ExtensionPointDisablePolicy;
         PROCESS_MITIGATION_DYNAMIC_CODE_POLICY DynamicCodePolicy;
+
+#if (NTDDI_VERSION >= NTDDI_WIN10_TH2)
         PROCESS_MITIGATION_CONTROL_FLOW_GUARD_POLICY ControlFlowGuardPolicy;
         PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY SignaturePolicy;
         PROCESS_MITIGATION_FONT_DISABLE_POLICY FontDisablePolicy;
         PROCESS_MITIGATION_IMAGE_LOAD_POLICY ImageLoadPolicy;
+#endif // NTDDI_VERSION >= NTDDI_WIN10_TH2
+
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS3)
         PROCESS_MITIGATION_SYSTEM_CALL_FILTER_POLICY SystemCallFilterPolicy;
         PROCESS_MITIGATION_PAYLOAD_RESTRICTION_POLICY PayloadRestrictionPolicy;
         PROCESS_MITIGATION_CHILD_PROCESS_POLICY ChildProcessPolicy;
+#endif // NTDDI_VERSION >= NTDDI_WIN10
+
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS5)
         PROCESS_MITIGATION_SIDE_CHANNEL_ISOLATION_POLICY SideChannelIsolationPolicy;
+#endif // NTDDI_VERSION >= NTDDI_WIN10_RS5
+
+#if (NTDDI_VERSION >= NTDDI_WIN10_VB)
         PROCESS_MITIGATION_USER_SHADOW_STACK_POLICY UserShadowStackPolicy;
+#endif // NTDDI_VERSION >= NTDDI_WIN10_MN
+
+#if (NTDDI_VERSION >= NTDDI_WIN10_MN)
         PROCESS_MITIGATION_REDIRECTION_TRUST_POLICY RedirectionTrustPolicy;
+#endif // NTDDI_VERSION >= NTDDI_WIN10_MN
+
     };
 } PROCESS_MITIGATION_POLICY_INFORMATION, * PPROCESS_MITIGATION_POLICY_INFORMATION;
 
@@ -1353,6 +1392,11 @@ typedef struct _POWER_THROTTLING_PROCESS_STATE
 } POWER_THROTTLING_PROCESS_STATE, * PPOWER_THROTTLING_PROCESS_STATE;
 #endif // !_KERNEL_MODE
 
+// rev (tyranid)
+#define WIN32K_SYSCALL_FILTER_STATE_ENABLE 0x1
+#define WIN32K_SYSCALL_FILTER_STATE_AUDIT  0x2
+
+// private
 typedef struct _WIN32K_SYSCALL_FILTER
 {
     ULONG FilterState;
@@ -1397,11 +1441,16 @@ typedef struct _POWER_THROTTLING_THREAD_STATE
 } POWER_THROTTLING_THREAD_STATE, * PPOWER_THROTTLING_THREAD_STATE;
 #endif // !_KERNEL_MODE
 
-#define PROCESS_READWRITEVM_LOGGING_ENABLE_READVM 1
-#define PROCESS_READWRITEVM_LOGGING_ENABLE_WRITEVM 2
-#define PROCESS_READWRITEVM_LOGGING_ENABLE_READVM_V 1UL
-#define PROCESS_READWRITEVM_LOGGING_ENABLE_WRITEVM_V 2UL
+//
+// Process Read/WriteVm Logging
+// NtQueryInformationProcess using ProcessEnableReadWriteVmLogging
+//
+#define PROCESS_READWRITEVM_LOGGING_ENABLE_READVM       0x01
+#define PROCESS_READWRITEVM_LOGGING_ENABLE_READVM_V     1UL
+#define PROCESS_READWRITEVM_LOGGING_ENABLE_WRITEVM      0x02L
+#define PROCESS_READWRITEVM_LOGGING_ENABLE_WRITEVM_V    2UL
 
+#if (WDK_NTDDI_VERSION != NTDDI_WIN10_RS3) && (WDK_NTDDI_VERSION != NTDDI_WIN10_RS4)
 typedef union _PROCESS_READWRITEVM_LOGGING_INFORMATION
 {
     UCHAR Flags;
@@ -1412,6 +1461,7 @@ typedef union _PROCESS_READWRITEVM_LOGGING_INFORMATION
         UCHAR Unused : 6;
     };
 } PROCESS_READWRITEVM_LOGGING_INFORMATION, * PPROCESS_READWRITEVM_LOGGING_INFORMATION;
+#endif // (WDK_NTDDI_VERSION != NTDDI_WIN10_RS3) && (WDK_NTDDI_VERSION != NTDDI_WIN10_RS4)
 
 typedef struct _PROCESS_UPTIME_INFORMATION
 {
@@ -1517,9 +1567,9 @@ typedef struct _THREAD_BASIC_INFORMATION
     NTSTATUS ExitStatus;
     PTEB TebBaseAddress;
     CLIENT_ID ClientId;
-    ULONG_PTR AffinityMask;
+    KAFFINITY AffinityMask;
     KPRIORITY Priority;
-    LONG BasePriority;
+    KAFFINITY BasePriority;
 } THREAD_BASIC_INFORMATION, * PTHREAD_BASIC_INFORMATION;
 
 // private
@@ -1721,14 +1771,27 @@ ZwCreateProcess(
     _In_ BOOLEAN InheritObjectTable,
     _In_opt_ HANDLE SectionHandle,
     _In_opt_ HANDLE DebugPort,
-    _In_opt_ HANDLE ExceptionPort
+    _In_opt_ HANDLE TokenHandle
 );
 
-#define PROCESS_CREATE_FLAGS_BREAKAWAY              0x00000001
-#define PROCESS_CREATE_FLAGS_NO_DEBUG_INHERIT       0x00000002
-#define PROCESS_CREATE_FLAGS_INHERIT_HANDLES        0x00000004
-#define PROCESS_CREATE_FLAGS_OVERRIDE_ADDRESS_SPACE 0x00000008
-#define PROCESS_CREATE_FLAGS_LARGE_PAGES            0x00000010
+// begin_rev
+#define PROCESS_CREATE_FLAGS_BREAKAWAY              0x00000001 // NtCreateProcessEx & NtCreateUserProcess
+#define PROCESS_CREATE_FLAGS_NO_DEBUG_INHERIT       0x00000002 // NtCreateProcessEx & NtCreateUserProcess
+#define PROCESS_CREATE_FLAGS_INHERIT_HANDLES        0x00000004 // NtCreateProcessEx & NtCreateUserProcess
+#define PROCESS_CREATE_FLAGS_OVERRIDE_ADDRESS_SPACE 0x00000008 // NtCreateProcessEx only
+#define PROCESS_CREATE_FLAGS_LARGE_PAGES            0x00000010 // NtCreateProcessEx only, requires SeLockMemory
+#define PROCESS_CREATE_FLAGS_LARGE_PAGE_SYSTEM_DLL  0x00000020 // NtCreateProcessEx only, requires SeLockMemory
+#define PROCESS_CREATE_FLAGS_PROTECTED_PROCESS      0x00000040 // NtCreateUserProcess only
+#define PROCESS_CREATE_FLAGS_CREATE_SESSION         0x00000080 // NtCreateProcessEx & NtCreateUserProcess, requires SeLoadDriver
+#define PROCESS_CREATE_FLAGS_INHERIT_FROM_PARENT    0x00000100 // NtCreateProcessEx & NtCreateUserProcess
+#define PROCESS_CREATE_FLAGS_SUSPENDED              0x00000200 // NtCreateProcessEx & NtCreateUserProcess
+#define PROCESS_CREATE_FLAGS_FORCE_BREAKAWAY        0x00000400 // NtCreateProcessEx & NtCreateUserProcess, requires SeTcb
+#define PROCESS_CREATE_FLAGS_MINIMAL_PROCESS        0x00000800 // NtCreateProcessEx only
+#define PROCESS_CREATE_FLAGS_RELEASE_SECTION        0x00001000 // NtCreateProcessEx & NtCreateUserProcess
+#define PROCESS_CREATE_FLAGS_AUXILIARY_PROCESS      0x00008000 // NtCreateProcessEx & NtCreateUserProcess, requires SeTcb
+#define PROCESS_CREATE_FLAGS_CREATE_STORE           0x00020000 // NtCreateProcessEx & NtCreateUserProcess
+#define PROCESS_CREATE_FLAGS_USE_PROTECTED_ENVIRONMENT 0x00040000 // NtCreateProcessEx & NtCreateUserProcess
+// end_rev
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -1738,10 +1801,10 @@ NtCreateProcessEx(
     _In_ ACCESS_MASK DesiredAccess,
     _In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
     _In_ HANDLE ParentProcess,
-    _In_ ULONG Flags,
+    _In_ ULONG Flags, // PROCESS_CREATE_FLAGS_*
     _In_opt_ HANDLE SectionHandle,
     _In_opt_ HANDLE DebugPort,
-    _In_opt_ HANDLE ExceptionPort,
+    _In_opt_ HANDLE TokenHandle,
     _Reserved_ ULONG Reserved // JobMemberLevel
 );
 
@@ -1847,7 +1910,7 @@ ZwResumeProcess(
 #define NtCurrentThreadToken()          ((HANDLE)(LONG_PTR)-5) // NtOpenThreadToken(NtCurrentThread())
 #define NtCurrentThreadEffectiveToken() ((HANDLE)(LONG_PTR)-6) // NtOpenThreadToken(NtCurrentThread()) + NtOpenProcessToken(NtCurrentProcess())
 
-#define NtCurrentSilo()                 ((HANDLE)(LONG_PTR)-1)
+#define NtCurrentSilo() ( (HANDLE)(LONG_PTR) -1 )
 
 // Not NT, but useful.
 #define NtCurrentProcessId()            (NtCurrentTeb()->ClientId.UniqueProcess)
@@ -1908,7 +1971,7 @@ NTSTATUS
 NTAPI
 NtGetNextThread(
     _In_ HANDLE ProcessHandle,
-    _In_ HANDLE ThreadHandle,
+    _In_opt_ HANDLE ThreadHandle,
     _In_ ACCESS_MASK DesiredAccess,
     _In_ ULONG HandleAttributes,
     _In_ ULONG Flags,
@@ -2185,7 +2248,7 @@ ZwGetCurrentProcessorNumber(
     VOID
 );
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
+#if (NTDDI_VERSION >= NTDDI_WIN10)
 __kernel_entry NTSYSCALLAPI
 ULONG
 NTAPI
@@ -2200,7 +2263,7 @@ NTAPI
 ZwGetCurrentProcessorNumberEx(
     _Out_opt_ PPROCESSOR_NUMBER ProcessorNumber
 );
-#endif
+#endif // NTDDI_VERSION >= NTDDI_WIN10
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -2348,7 +2411,6 @@ ZwContinue(
     _In_ BOOLEAN TestAlert
 );
 
-#if (NTDDI_VERSION >= NTDDI_WINTHRESHOLD)
 typedef enum _KCONTINUE_TYPE
 {
     KCONTINUE_UNWIND,
@@ -2368,6 +2430,7 @@ typedef struct _KCONTINUE_ARGUMENT
 #define KCONTINUE_FLAG_TEST_ALERT  0x00000001 // wbenny
 #define KCONTINUE_FLAG_DELIVER_APC 0x00000002 // wbenny
 
+#if (NTDDI_VERSION >= NTDDI_WIN10_VB)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -2384,6 +2447,7 @@ ZwContinueEx(
     _In_ PCONTEXT ContextRecord,
     _In_ PVOID ContinueArgument // PKCONTINUE_ARGUMENT and BOOLEAN are valid
 );
+#endif // NTDDI_VERSION >= NTDDI_WIN10_VB
 
 //FORCEINLINE
 //NTSTATUS
@@ -2404,7 +2468,6 @@ ZwContinueEx(
 //{
 //    return ZwContinueEx(ContextRecord, (PCONTINUE_ARGUMENT)TestAlert);
 //}
-#endif
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -2465,11 +2528,30 @@ ZwSetLdtEntries(
     _In_ ULONG Entry1Hi
 );
 
-typedef VOID(*PPS_APC_ROUTINE)(
+typedef VOID(NTAPI*PPS_APC_ROUTINE)(
     _In_opt_ PVOID ApcArgument1,
     _In_opt_ PVOID ApcArgument2,
     _In_opt_ PVOID ApcArgument3
     );
+
+inline
+PVOID Wow64EncodeApcRoutine(_In_ PVOID ApcRoutine)
+{
+    if (ApcRoutine <= (PVOID)(SIZE_T)0xFFFFFFFF) {
+        ApcRoutine = (PVOID)(-((LONG_PTR)ApcRoutine << 2));
+    }
+    return ApcRoutine;
+}
+
+inline
+PVOID Wow64DecodeApcRoutine(_In_ PVOID ApcRoutine)
+{
+    PVOID DecodedApcRoutine = (PVOID)((-(LONG_PTR)ApcRoutine) >> 2);
+    if (DecodedApcRoutine > (PVOID)(SIZE_T)0xFFFFFFFF) {
+        DecodedApcRoutine = ApcRoutine;
+    }
+    return DecodedApcRoutine;
+}
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -2538,7 +2620,7 @@ NTAPI
 NtQueueApcThreadEx2(
     _In_ HANDLE ThreadHandle,
     _In_opt_ HANDLE ReserveHandle, // NtAllocateReserveObject
-    _In_ QUEUE_USER_APC_FLAGS ApcFlags,
+    _In_ ULONG ApcFlags, // QUEUE_USER_APC_FLAGS
     _In_ PPS_APC_ROUTINE ApcRoutine,
     _In_opt_ PVOID ApcArgument1,
     _In_opt_ PVOID ApcArgument2,
@@ -2558,7 +2640,7 @@ ZwQueueApcThreadEx2(
     _In_opt_ PVOID ApcArgument2,
     _In_opt_ PVOID ApcArgument3
 );
-#endif
+#endif // (NTDDI_VERSION >= NTDDI_WIN10_CO)
 
 #if (NTDDI_VERSION >= NTDDI_WIN8)
 // rev
@@ -2612,35 +2694,227 @@ ZwWaitForAlertByThreadId(
 #define PS_ATTRIBUTE_INPUT          0x00020000 // input only
 #define PS_ATTRIBUTE_ADDITIVE       0x00040000 // "accumulated" e.g. bitmasks, counters, etc.
 
+#ifdef _KERNEL_MODE
+typedef enum _PROC_THREAD_ATTRIBUTE_NUM {
+    ProcThreadAttributeParentProcess                = 0,
+    ProcThreadAttributeExtendedFlags                = 1,
+    ProcThreadAttributeHandleList                   = 2,
+    ProcThreadAttributeGroupAffinity                = 3,
+    ProcThreadAttributePreferredNode                = 4,
+    ProcThreadAttributeIdealProcessor               = 5,
+    ProcThreadAttributeUmsThread                    = 6,
+    ProcThreadAttributeMitigationPolicy             = 7,
+    ProcThreadAttributePackageFullName              = 8,
+    ProcThreadAttributeSecurityCapabilities         = 9,
+    ProcThreadAttributeConsoleReference             = 10,
+    ProcThreadAttributeProtectionLevel              = 11,
+    ProcThreadAttributeOsMaxVersionTested           = 12,
+    ProcThreadAttributeJobList                      = 13,
+    ProcThreadAttributeChildProcessPolicy           = 14,
+    ProcThreadAttributeAllApplicationPackagesPolicy = 15,
+    ProcThreadAttributeWin32kFilter                 = 16,
+    ProcThreadAttributeSafeOpenPromptOriginClaim    = 17,
+    ProcThreadAttributeDesktopAppPolicy             = 18,
+    ProcThreadAttributeBnoIsolation                 = 19,
+    ProcThreadAttributePseudoConsole                = 22,
+    ProcThreadAttributeIsolationManifest            = 23,
+    ProcThreadAttributeMitigationAuditPolicy        = 24,
+    ProcThreadAttributeMachineType                  = 25,
+    ProcThreadAttributeComponentFilter              = 26,
+    ProcThreadAttributeEnableOptionalXStateFeatures = 27,
+    ProcThreadAttributeCreateStore                  = 28,
+    ProcThreadAttributeTrustedApp                   = 29,
+} PROC_THREAD_ATTRIBUTE_NUM;
+#else // _KERNEL_MODE
 // PROC_THREAD_ATTRIBUTE_NUM (Win32 CreateProcess) (dmex)
-#define ProcThreadAttributeParentProcess    0 // in HANDLE
-#define ProcThreadAttributeExtendedFlags    1 // in ULONG (PROC_EXTENDED_FLAG)
-#define ProcThreadAttributeHandleList       2 // in HANDLE[]
-#define ProcThreadAttributeGroupAffinity    3 // in GROUP_AFFINITY // since WIN7
-#define ProcThreadAttributePreferredNode    4 // in USHORT
-#define ProcThreadAttributeIdealProcessor   5 // in PROCESSOR_NUMBER
-#define ProcThreadAttributeUmsThread        6 // in UMS_CREATE_THREAD_ATTRIBUTES
-#define ProcThreadAttributeMitigationPolicy 7 // in ULONG[] or ULONG64[]
-#define ProcThreadAttributePackageName      8 // in WCHAR[] // since WIN8
-#define ProcThreadAttributeSecurityCapabilities 9 // in SECURITY_CAPABILITIES
-#define ProcThreadAttributeConsoleReference 10 // BaseGetConsoleReference (kernelbase.dll)
-#define ProcThreadAttributeProtectionLevel  11 // in ULONG
-#define ProcThreadAttributeJobList          13 // in HANDLE[] // since WIN10
-#define ProcThreadAttributeChildProcessPolicy 14 // in ULONG
-#define ProcThreadAttributeAllApplicationPackagesPolicy 15 // in ULONG
-#define ProcThreadAttributeWin32kFilter     16 // in PROC_THREAD_WIN32KFILTER_ATTRIBUTE
-#define ProcThreadAttributeSafeOpenPromptOriginClaim 17 // since RS1
-#define ProcThreadAttributeDesktopAppPolicy 18 // in ULONG // since RS2
-#define ProcThreadAttributeBnoIsolation     19 // in PROC_THREAD_BNOISOLATION_ATTRIBUTE
-#define ProcThreadAttributePseudoConsole    22 // in HANDLE (HPCON) // since RS5
-#define ProcThreadAttributeMitigationAuditPolicy 24 // in ULONG[] or ULONG64[] // since 20H1
-#define ProcThreadAttributeMachineType      25 // in ULONG
-#define ProcThreadAttributeComponentFilter  26 // in ULONG
-#define ProcThreadAttributeEnableOptionalXStateFeatures 27 // in ULONG // since 20H2
+#define ProcThreadAttributeParentProcess                ((_PROC_THREAD_ATTRIBUTE_NUM)0 ) // in HANDLE
+#define ProcThreadAttributeExtendedFlags                ((_PROC_THREAD_ATTRIBUTE_NUM)1 ) // in ULONG (EXTENDED_PROCESS_CREATION_FLAG_*)
+#define ProcThreadAttributeHandleList                   ((_PROC_THREAD_ATTRIBUTE_NUM)2 ) // in HANDLE[]
+#define ProcThreadAttributeGroupAffinity                ((_PROC_THREAD_ATTRIBUTE_NUM)3 ) // in GROUP_AFFINITY // since WIN7
+#define ProcThreadAttributePreferredNode                ((_PROC_THREAD_ATTRIBUTE_NUM)4 ) // in USHORT
+#define ProcThreadAttributeIdealProcessor               ((_PROC_THREAD_ATTRIBUTE_NUM)5 ) // in PROCESSOR_NUMBER
+#define ProcThreadAttributeUmsThread                    ((_PROC_THREAD_ATTRIBUTE_NUM)6 ) // in UMS_CREATE_THREAD_ATTRIBUTES
+#define ProcThreadAttributeMitigationPolicy             ((_PROC_THREAD_ATTRIBUTE_NUM)7 ) // in ULONG, ULONG64 or ULONG64[2]
+#define ProcThreadAttributePackageFullName              ((_PROC_THREAD_ATTRIBUTE_NUM)8 ) // in WCHAR[] // since WIN8
+#define ProcThreadAttributeSecurityCapabilities         ((_PROC_THREAD_ATTRIBUTE_NUM)9 ) // in SECURITY_CAPABILITIES
+#define ProcThreadAttributeConsoleReference             ((_PROC_THREAD_ATTRIBUTE_NUM)10) // BaseGetConsoleReference (kernelbase.dll)
+#define ProcThreadAttributeProtectionLevel              ((_PROC_THREAD_ATTRIBUTE_NUM)11) // in ULONG (PROTECTION_LEVEL_*) // since WINBLUE
+#define ProcThreadAttributeOsMaxVersionTested           ((_PROC_THREAD_ATTRIBUTE_NUM)12) // in MAXVERSIONTESTED_INFO // since THRESHOLD // (from exe.manifest)
+#define ProcThreadAttributeJobList                      ((_PROC_THREAD_ATTRIBUTE_NUM)13) // in HANDLE[] // since WIN10
+#define ProcThreadAttributeChildProcessPolicy           ((_PROC_THREAD_ATTRIBUTE_NUM)14) // in ULONG
+#define ProcThreadAttributeAllApplicationPackagesPolicy ((_PROC_THREAD_ATTRIBUTE_NUM)15) // in ULONG
+#define ProcThreadAttributeWin32kFilter                 ((_PROC_THREAD_ATTRIBUTE_NUM)16) // in PROC_THREAD_WIN32KFILTER_ATTRIBUTE
+#define ProcThreadAttributeSafeOpenPromptOriginClaim    ((_PROC_THREAD_ATTRIBUTE_NUM)17) // since RS1
+#define ProcThreadAttributeDesktopAppPolicy             ((_PROC_THREAD_ATTRIBUTE_NUM)18) // in ULONG // since RS2
+#define ProcThreadAttributeBnoIsolation                 ((_PROC_THREAD_ATTRIBUTE_NUM)19) // in PROC_THREAD_BNOISOLATION_ATTRIBUTE
+#define ProcThreadAttributePseudoConsole                ((_PROC_THREAD_ATTRIBUTE_NUM)22) // in HANDLE (HPCON) // since RS5
+#define ProcThreadAttributeIsolationManifest            ((_PROC_THREAD_ATTRIBUTE_NUM)23) // in ISOLATION_MANIFEST_PROPERTIES // rev (diversenok) // since 19H2+
+#define ProcThreadAttributeMitigationAuditPolicy        ((_PROC_THREAD_ATTRIBUTE_NUM)24) // in ULONG, ULONG64, or ULONG64[2] // since 21H1
+#define ProcThreadAttributeMachineType                  ((_PROC_THREAD_ATTRIBUTE_NUM)25) // in USHORT // since 21H2
+#define ProcThreadAttributeComponentFilter              ((_PROC_THREAD_ATTRIBUTE_NUM)26) // in ULONG
+#define ProcThreadAttributeEnableOptionalXStateFeatures ((_PROC_THREAD_ATTRIBUTE_NUM)27) // in ULONG64 // since WIN11
+#define ProcThreadAttributeCreateStore                  ((_PROC_THREAD_ATTRIBUTE_NUM)28) // ULONG // rev (diversenok)
+#define ProcThreadAttributeTrustedApp                   ((_PROC_THREAD_ATTRIBUTE_NUM)29)
+#endif // !_KERNEL_MODE
 
-#define PROC_EXTENDED_FLAG_LOG_ELEVATION_FAILURE    0x1
-#define PROC_EXTENDED_FLAG_IGNORE_ELEVATION         0x2
-#define PROC_EXTENDED_FLAG_FORCE_JOB_BREAKAWAY      0x4 // (requires SeTcbPrivilege)
+#ifndef ProcThreadAttributeValue
+#define ProcThreadAttributeValue(Number, Thread, Input, Additive) \
+    (((Number) & PROC_THREAD_ATTRIBUTE_NUMBER) | \
+     ((Thread != FALSE) ? PROC_THREAD_ATTRIBUTE_THREAD : 0) | \
+     ((Input != FALSE) ? PROC_THREAD_ATTRIBUTE_INPUT : 0) | \
+     ((Additive != FALSE) ? PROC_THREAD_ATTRIBUTE_ADDITIVE : 0))
+#endif
+
+#ifndef PROC_THREAD_ATTRIBUTE_PARENT_PROCESS
+#define PROC_THREAD_ATTRIBUTE_PARENT_PROCESS \
+    ProcThreadAttributeValue (ProcThreadAttributeParentProcess, FALSE, TRUE, FALSE)
+#endif 
+#ifndef PROC_THREAD_ATTRIBUTE_EXTENDED_FLAGS
+#define PROC_THREAD_ATTRIBUTE_EXTENDED_FLAGS \
+    ProcThreadAttributeValue (ProcThreadAttributeExtendedFlags, FALSE, TRUE, TRUE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_PACKAGE_FULL_NAME
+#define PROC_THREAD_ATTRIBUTE_PACKAGE_FULL_NAME \
+    ProcThreadAttributeValue(ProcThreadAttributePackageFullName, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_HANDLE_LIST
+#define PROC_THREAD_ATTRIBUTE_HANDLE_LIST \
+    ProcThreadAttributeValue (ProcThreadAttributeHandleList, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_GROUP_AFFINITY
+#define PROC_THREAD_ATTRIBUTE_GROUP_AFFINITY \
+    ProcThreadAttributeValue (ProcThreadAttributeGroupAffinity, TRUE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_PREFERRED_NODE
+#define PROC_THREAD_ATTRIBUTE_PREFERRED_NODE \
+    ProcThreadAttributeValue (ProcThreadAttributePreferredNode, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_IDEAL_PROCESSOR
+#define PROC_THREAD_ATTRIBUTE_IDEAL_PROCESSOR \
+    ProcThreadAttributeValue (ProcThreadAttributeIdealProcessor, TRUE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_UMS_THREAD
+#define PROC_THREAD_ATTRIBUTE_UMS_THREAD \
+    ProcThreadAttributeValue (ProcThreadAttributeUmsThread, TRUE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY
+#define PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY \
+    ProcThreadAttributeValue (ProcThreadAttributeMitigationPolicy, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES
+#define PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES \
+    ProcThreadAttributeValue (ProcThreadAttributeSecurityCapabilities, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_CONSOLE_REFERENCE
+#define PROC_THREAD_ATTRIBUTE_CONSOLE_REFERENCE \
+    ProcThreadAttributeValue (ProcThreadAttributeConsoleReference, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_OSMAXVERSIONTESTED
+#define PROC_THREAD_ATTRIBUTE_OSMAXVERSIONTESTED \
+    ProcThreadAttributeValue(ProcThreadAttributeOsMaxVersionTested, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_PROTECTION_LEVEL
+#define PROC_THREAD_ATTRIBUTE_PROTECTION_LEVEL \
+    ProcThreadAttributeValue (ProcThreadAttributeProtectionLevel, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_SAFE_OPEN_PROMPT_ORIGIN_CLAIM
+#define PROC_THREAD_ATTRIBUTE_SAFE_OPEN_PROMPT_ORIGIN_CLAIM \
+    ProcThreadAttributeValue (ProcThreadAttributeSafeOpenPromptOriginClaim, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_BNO_ISOLATION
+#define PROC_THREAD_ATTRIBUTE_BNO_ISOLATION \
+    ProcThreadAttributeValue (ProcThreadAttributeBnoIsolation, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_ISOLATION_MANIFEST
+#define PROC_THREAD_ATTRIBUTE_ISOLATION_MANIFEST \
+    ProcThreadAttributeValue(ProcThreadAttributeIsolationManifest, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
+#define PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE \
+    ProcThreadAttributeValue (ProcThreadAttributePseudoConsole, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_MACHINE_TYPE
+#define PROC_THREAD_ATTRIBUTE_MACHINE_TYPE \
+    ProcThreadAttributeValue (ProcThreadAttributeMachineType, FALSE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_ENABLE_OPTIONAL_XSTATE_FEATURES
+#define PROC_THREAD_ATTRIBUTE_ENABLE_OPTIONAL_XSTATE_FEATURES \
+    ProcThreadAttributeValue (ProcThreadAttributeEnableOptionalXStateFeatures, TRUE, TRUE, FALSE)
+#endif
+#ifndef PROC_THREAD_ATTRIBUTE_CREATE_STORE
+#define PROC_THREAD_ATTRIBUTE_CREATE_STORE \
+    ProcThreadAttributeValue(ProcThreadAttributeCreateStore, FALSE, TRUE, FALSE)
+#endif
+
+// private
+typedef struct _PROC_THREAD_ATTRIBUTE
+{
+    ULONG_PTR Attribute;
+    SIZE_T Size;
+    ULONG_PTR Value;
+} PROC_THREAD_ATTRIBUTE, * PPROC_THREAD_ATTRIBUTE;
+
+// private
+typedef struct _PROC_THREAD_ATTRIBUTE_LIST
+{
+    ULONG PresentFlags;
+    ULONG AttributeCount;
+    ULONG LastAttribute;
+    ULONG SpareUlong0;
+    PPROC_THREAD_ATTRIBUTE ExtendedFlagsAttribute;
+    PROC_THREAD_ATTRIBUTE Attributes[1];
+} PROC_THREAD_ATTRIBUTE_LIST, * PPROC_THREAD_ATTRIBUTE_LIST;
+
+// private
+#define EXTENDED_PROCESS_CREATION_FLAG_ELEVATION_HANDLED 0x00000001
+#define EXTENDED_PROCESS_CREATION_FLAG_FORCELUA 0x00000002
+#define EXTENDED_PROCESS_CREATION_FLAG_FORCE_BREAKAWAY 0x00000004 // requires SeTcbPrivilege // since WINBLUE
+
+// private
+#define PROTECTION_LEVEL_WINTCB_LIGHT 0x00000000
+#define PROTECTION_LEVEL_WINDOWS 0x00000001
+#define PROTECTION_LEVEL_WINDOWS_LIGHT 0x00000002
+#define PROTECTION_LEVEL_ANTIMALWARE_LIGHT 0x00000003
+#define PROTECTION_LEVEL_LSA_LIGHT 0x00000004
+#define PROTECTION_LEVEL_WINTCB 0x00000005
+#define PROTECTION_LEVEL_CODEGEN_LIGHT 0x00000006
+#define PROTECTION_LEVEL_AUTHENTICODE 0x00000007
+
+// private
+typedef enum _SE_SAFE_OPEN_PROMPT_EXPERIENCE_RESULTS
+{
+    SeSafeOpenExperienceNone = 0x00,
+    SeSafeOpenExperienceCalled = 0x01,
+    SeSafeOpenExperienceAppRepCalled = 0x02,
+    SeSafeOpenExperiencePromptDisplayed = 0x04,
+    SeSafeOpenExperienceUAC = 0x08,
+    SeSafeOpenExperienceUninstaller = 0x10,
+    SeSafeOpenExperienceIgnoreUnknownOrBad = 0x20,
+    SeSafeOpenExperienceDefenderTrustedInstaller = 0x40,
+    SeSafeOpenExperienceMOTWPresent = 0x80
+} SE_SAFE_OPEN_PROMPT_EXPERIENCE_RESULTS;
+
+// private
+typedef struct _SE_SAFE_OPEN_PROMPT_RESULTS
+{
+    SE_SAFE_OPEN_PROMPT_EXPERIENCE_RESULTS Results;
+    WCHAR Path[MAX_PATH];
+} SE_SAFE_OPEN_PROMPT_RESULTS, * PSE_SAFE_OPEN_PROMPT_RESULTS;
+
+typedef struct _PROC_THREAD_BNOISOLATION_ATTRIBUTE
+{
+    BOOL IsolationEnabled;
+    WCHAR IsolationPrefix[0x88];
+} PROC_THREAD_BNOISOLATION_ATTRIBUTE, * PPROC_THREAD_BNOISOLATION_ATTRIBUTE;
+
+// private
+typedef struct _ISOLATION_MANIFEST_PROPERTIES
+{
+    UNICODE_STRING InstancePath;
+    UNICODE_STRING FriendlyName;
+    UNICODE_STRING Description;
+    ULONG_PTR Level;
+} ISOLATION_MANIFEST_PROPERTIES, * PISOLATION_MANIFEST_PROPERTIES;
 
 #define WIN32KFILTER_FLAG_ENABLE    0x1
 #define WIN32KFILTER_FLAG_AUDIT     0x2
@@ -2651,34 +2925,11 @@ typedef struct _PROC_THREAD_WIN32KFILTER_ATTRIBUTE
     ULONG FilterLevel;
 } PROC_THREAD_WIN32KFILTER_ATTRIBUTE, * PPROC_THREAD_WIN32KFILTER_ATTRIBUTE;
 
-typedef struct _PROC_THREAD_BNOISOLATION_ATTRIBUTE
-{
-    BOOL IsolationEnabled;
-    WCHAR IsolationPrefix[0x88];
-} PROC_THREAD_BNOISOLATION_ATTRIBUTE, * PPROC_THREAD_BNOISOLATION_ATTRIBUTE;
-
-#ifndef PROC_THREAD_ATTRIBUTE_EXTENDED_FLAGS
-#define PROC_THREAD_ATTRIBUTE_EXTENDED_FLAGS \
-    ProcThreadAttributeValue(ProcThreadAttributeExtendedFlags, FALSE, TRUE, TRUE)
-#endif
-#ifndef PROC_THREAD_ATTRIBUTE_CONSOLE_REFERENCE
-#define PROC_THREAD_ATTRIBUTE_CONSOLE_REFERENCE \
-    ProcThreadAttributeValue(ProcThreadAttributeConsoleReference, FALSE, TRUE, FALSE)
-#endif
-#ifndef PROC_THREAD_ATTRIBUTE_SAFE_OPEN_PROMPT_ORIGIN_CLAIM
-#define PROC_THREAD_ATTRIBUTE_SAFE_OPEN_PROMPT_ORIGIN_CLAIM \
-    ProcThreadAttributeValue(ProcThreadAttributeSafeOpenPromptOriginClaim, FALSE, TRUE, FALSE)
-#endif
-#ifndef PROC_THREAD_ATTRIBUTE_BNO_ISOLATION
-#define PROC_THREAD_ATTRIBUTE_BNO_ISOLATION \
-    ProcThreadAttributeValue(ProcThreadAttributeBnoIsolation, FALSE, TRUE, FALSE)
-#endif
-
 // private
 typedef enum _PS_ATTRIBUTE_NUM
 {
     PsAttributeParentProcess, // in HANDLE
-    PsAttributeDebugPort, // in HANDLE
+    PsAttributeDebugObject, // in HANDLE
     PsAttributeToken, // in HANDLE
     PsAttributeClientId, // out PCLIENT_ID
     PsAttributeTebAddress, // out PTEB *
@@ -2688,28 +2939,34 @@ typedef enum _PS_ATTRIBUTE_NUM
     PsAttributePriorityClass, // in UCHAR
     PsAttributeErrorMode, // in ULONG
     PsAttributeStdHandleInfo, // 10, in PPS_STD_HANDLE_INFO
-    PsAttributeHandleList, // in PHANDLE
+    PsAttributeHandleList, // in HANDLE[]
     PsAttributeGroupAffinity, // in PGROUP_AFFINITY
     PsAttributePreferredNode, // in PUSHORT
     PsAttributeIdealProcessor, // in PPROCESSOR_NUMBER
     PsAttributeUmsThread, // ? in PUMS_CREATE_THREAD_ATTRIBUTES
-    PsAttributeMitigationOptions, // in UCHAR
-    PsAttributeProtectionLevel, // in ULONG
-    PsAttributeSecureProcess, // since THRESHOLD
-    PsAttributeJobList,
-    PsAttributeChildProcessPolicy, // since THRESHOLD2
-    PsAttributeAllApplicationPackagesPolicy, // since REDSTONE
-    PsAttributeWin32kFilter,
-    PsAttributeSafeOpenPromptOriginClaim,
-    PsAttributeBnoIsolation, // PS_BNO_ISOLATION_PARAMETERS
-    PsAttributeDesktopAppPolicy, // in ULONG
-    PsAttributeChpe, // since REDSTONE3
-    PsAttributeMitigationAuditOptions, // since 21H1
-    PsAttributeMachineType, // since WIN11
+    PsAttributeMitigationOptions, // in PPS_MITIGATION_OPTIONS_MAP (PROCESS_CREATION_MITIGATION_POLICY_*) // since WIN8
+    PsAttributeProtectionLevel, // in PS_PROTECTION // since WINBLUE
+    PsAttributeSecureProcess, // in PPS_TRUSTLET_CREATE_ATTRIBUTES, since THRESHOLD
+    PsAttributeJobList, // in HANDLE[]
+    PsAttributeChildProcessPolicy, // 20, in PULONG (PROCESS_CREATION_CHILD_PROCESS_*) // since THRESHOLD2
+    PsAttributeAllApplicationPackagesPolicy, // in PULONG (PROCESS_CREATION_ALL_APPLICATION_PACKAGES_*) // since REDSTONE
+    PsAttributeWin32kFilter, // in PWIN32K_SYSCALL_FILTER
+    PsAttributeSafeOpenPromptOriginClaim, // in
+    PsAttributeBnoIsolation, // in PPS_BNO_ISOLATION_PARAMETERS // since REDSTONE2
+    PsAttributeDesktopAppPolicy, // in PULONG (PROCESS_CREATION_DESKTOP_APP_*)
+    PsAttributeChpe, // in BOOLEAN // since REDSTONE3
+    PsAttributeMitigationAuditOptions, // in PPS_MITIGATION_AUDIT_OPTIONS_MAP (PROCESS_CREATION_MITIGATION_AUDIT_POLICY_*) // since 21H1
+    PsAttributeMachineType, // in WORD // since 21H2
     PsAttributeComponentFilter,
-    PsAttributeEnableOptionalXStateFeatures,
+    PsAttributeEnableOptionalXStateFeatures, // since WIN11
     PsAttributeMax
 } PS_ATTRIBUTE_NUM;
+
+// private
+#define PS_ATTRIBUTE_NUMBER_MASK    0x0000ffff
+#define PS_ATTRIBUTE_THREAD         0x00010000 // may be used with thread creation
+#define PS_ATTRIBUTE_INPUT          0x00020000 // input only
+#define PS_ATTRIBUTE_ADDITIVE       0x00040000 // "accumulated" e.g. bitmasks, counters, etc.
 
 // begin_rev
 
@@ -2721,8 +2978,8 @@ typedef enum _PS_ATTRIBUTE_NUM
 
 #define PS_ATTRIBUTE_PARENT_PROCESS \
     PsAttributeValue(PsAttributeParentProcess, FALSE, TRUE, TRUE)
-#define PS_ATTRIBUTE_DEBUG_PORT \
-    PsAttributeValue(PsAttributeDebugPort, FALSE, TRUE, TRUE)
+#define PS_ATTRIBUTE_DEBUG_OBJECT \
+    PsAttributeValue(PsAttributeDebugObject, FALSE, TRUE, TRUE)
 #define PS_ATTRIBUTE_TOKEN \
     PsAttributeValue(PsAttributeToken, FALSE, TRUE, TRUE)
 #define PS_ATTRIBUTE_CLIENT_ID \
@@ -2752,7 +3009,7 @@ typedef enum _PS_ATTRIBUTE_NUM
 #define PS_ATTRIBUTE_UMS_THREAD \
     PsAttributeValue(PsAttributeUmsThread, TRUE, TRUE, FALSE)
 #define PS_ATTRIBUTE_MITIGATION_OPTIONS \
-    PsAttributeValue(PsAttributeMitigationOptions, FALSE, TRUE, TRUE)
+    PsAttributeValue(PsAttributeMitigationOptions, FALSE, TRUE, FALSE)
 #define PS_ATTRIBUTE_PROTECTION_LEVEL \
     PsAttributeValue(PsAttributeProtectionLevel, FALSE, TRUE, TRUE)
 #define PS_ATTRIBUTE_SECURE_PROCESS \
@@ -2771,6 +3028,16 @@ typedef enum _PS_ATTRIBUTE_NUM
     PsAttributeValue(PsAttributeBnoIsolation, FALSE, TRUE, FALSE)
 #define PS_ATTRIBUTE_DESKTOP_APP_POLICY \
     PsAttributeValue(PsAttributeDesktopAppPolicy, FALSE, TRUE, FALSE)
+#define PS_ATTRIBUTE_CHPE \
+    PsAttributeValue(PsAttributeChpe, FALSE, TRUE, TRUE)
+#define PS_ATTRIBUTE_MITIGATION_AUDIT_OPTIONS \
+    PsAttributeValue(PsAttributeMitigationAuditOptions, FALSE, TRUE, FALSE)
+#define PS_ATTRIBUTE_MACHINE_TYPE \
+    PsAttributeValue(PsAttributeMachineType, FALSE, TRUE, TRUE)
+#define PS_ATTRIBUTE_COMPONENT_FILTER \
+    PsAttributeValue(PsAttributeComponentFilter, FALSE, TRUE, FALSE)
+#define PS_ATTRIBUTE_ENABLE_OPTIONAL_XSTATE_FEATURES \
+    PsAttributeValue(PsAttributeEnableOptionalXStateFeatures, TRUE, TRUE, FALSE)
 
 // end_rev
 
@@ -2809,9 +3076,9 @@ typedef enum _PS_STD_HANDLE_STATE
 } PS_STD_HANDLE_STATE;
 
 // begin_rev
-#define PS_STD_INPUT_HANDLE 0x1
+#define PS_STD_INPUT_HANDLE  0x1
 #define PS_STD_OUTPUT_HANDLE 0x2
-#define PS_STD_ERROR_HANDLE 0x4
+#define PS_STD_ERROR_HANDLE  0x4
 // end_rev
 
 typedef struct _PS_STD_HANDLE_INFO
@@ -2827,6 +3094,50 @@ typedef struct _PS_STD_HANDLE_INFO
     };
     ULONG StdHandleSubsystemType;
 } PS_STD_HANDLE_INFO, * PPS_STD_HANDLE_INFO;
+
+typedef union _PS_TRUSTLET_ATTRIBUTE_ACCESSRIGHTS
+{
+    UCHAR Trustlet : 1;
+    UCHAR Ntos : 1;
+    UCHAR WriteHandle : 1;
+    UCHAR ReadHandle : 1;
+    UCHAR Reserved : 4;
+    UCHAR AccessRights;
+} PS_TRUSTLET_ATTRIBUTE_ACCESSRIGHTS, * PPS_TRUSTLET_ATTRIBUTE_ACCESSRIGHTS;
+
+typedef struct _PS_TRUSTLET_ATTRIBUTE_TYPE
+{
+    union
+    {
+        struct
+        {
+            UCHAR Version;
+            UCHAR DataCount;
+            UCHAR SemanticType;
+            PS_TRUSTLET_ATTRIBUTE_ACCESSRIGHTS AccessRights;
+        };
+        ULONG AttributeType;
+    };
+} PS_TRUSTLET_ATTRIBUTE_TYPE, * PPS_TRUSTLET_ATTRIBUTE_TYPE;
+
+typedef struct _PS_TRUSTLET_ATTRIBUTE_HEADER
+{
+    PS_TRUSTLET_ATTRIBUTE_TYPE AttributeType;
+    ULONG InstanceNumber : 8;
+    ULONG Reserved : 24;
+} PS_TRUSTLET_ATTRIBUTE_HEADER, * PPS_TRUSTLET_ATTRIBUTE_HEADER;
+
+typedef struct _PS_TRUSTLET_ATTRIBUTE_DATA
+{
+    PS_TRUSTLET_ATTRIBUTE_HEADER Header;
+    ULONGLONG Data[1];
+} PS_TRUSTLET_ATTRIBUTE_DATA, * PPS_TRUSTLET_ATTRIBUTE_DATA;
+
+typedef struct _PS_TRUSTLET_CREATE_ATTRIBUTES
+{
+    ULONGLONG TrustletIdentity;
+    PS_TRUSTLET_ATTRIBUTE_DATA Attributes[1];
+} PS_TRUSTLET_CREATE_ATTRIBUTES, * PPS_TRUSTLET_CREATE_ATTRIBUTES;
 
 // private
 typedef struct _PS_BNO_ISOLATION_PARAMETERS
@@ -2968,21 +3279,6 @@ typedef struct _PS_CREATE_INFO
 
 // end_private
 
-// begin_rev
-#define PROCESS_CREATE_FLAGS_BREAKAWAY 0x00000001
-#define PROCESS_CREATE_FLAGS_NO_DEBUG_INHERIT 0x00000002
-#define PROCESS_CREATE_FLAGS_INHERIT_HANDLES 0x00000004
-#define PROCESS_CREATE_FLAGS_OVERRIDE_ADDRESS_SPACE 0x00000008
-#define PROCESS_CREATE_FLAGS_LARGE_PAGES 0x00000010
-#define PROCESS_CREATE_FLAGS_LARGE_PAGE_SYSTEM_DLL 0x00000020
-// Extended PROCESS_CREATE_FLAGS_*
-#define PROCESS_CREATE_FLAGS_PROTECTED_PROCESS 0x00000040
-#define PROCESS_CREATE_FLAGS_CREATE_SESSION 0x00000080 // ?
-#define PROCESS_CREATE_FLAGS_INHERIT_FROM_PARENT 0x00000100
-#define PROCESS_CREATE_FLAGS_SUSPENDED 0x00000200
-#define PROCESS_CREATE_FLAGS_EXTENDED_UNKNOWN 0x00000400
-// end_rev
-
 #if (NTDDI_VERSION >= NTDDI_VISTA)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -3021,13 +3317,13 @@ ZwCreateUserProcess(
 #endif
 
 // begin_rev
-#define THREAD_CREATE_FLAGS_CREATE_SUSPENDED        0x00000001
-#define THREAD_CREATE_FLAGS_SKIP_THREAD_ATTACH      0x00000002 // ?
-#define THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER      0x00000004
-#define THREAD_CREATE_FLAGS_HAS_SECURITY_DESCRIPTOR 0x00000010 // ?
-#define THREAD_CREATE_FLAGS_ACCESS_CHECK_IN_TARGET  0x00000020 // ?
-#define THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE   0x00000040 // ?
-#define THREAD_CREATE_FLAGS_INITIAL_THREAD          0x00000080
+#define THREAD_CREATE_FLAGS_CREATE_SUSPENDED        0x00000001 // NtCreateUserProcess & NtCreateThreadEx
+#define THREAD_CREATE_FLAGS_SKIP_THREAD_ATTACH      0x00000002 // NtCreateThreadEx only
+#define THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER      0x00000004 // NtCreateThreadEx only
+#define THREAD_CREATE_FLAGS_LOADER_WORKER           0x00000010 // NtCreateThreadEx only
+#define THREAD_CREATE_FLAGS_SKIP_LOADER_INIT        0x00000020 // NtCreateThreadEx only
+#define THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE   0x00000040 // NtCreateThreadEx only
+#define THREAD_CREATE_FLAGS_INITIAL_THREAD          0x00000080 // ?
 // end_rev
 
 #if (NTDDI_VERSION >= NTDDI_VISTA)
@@ -3126,56 +3422,56 @@ typedef enum _JOBOBJECTINFOCLASS
 }JOBOBJECTINFOCLASS;
 #else
 // Note: We don't use an enum since it conflicts with the Windows SDK.
-#define JobObjectBasicAccountingInformation 1 // JOBOBJECT_BASIC_ACCOUNTING_INFORMATION
-#define JobObjectBasicLimitInformation 2 // JOBOBJECT_BASIC_LIMIT_INFORMATION
-#define JobObjectBasicProcessIdList 3 // JOBOBJECT_BASIC_PROCESS_ID_LIST
-#define JobObjectBasicUIRestrictions 4 // JOBOBJECT_BASIC_UI_RESTRICTIONS
-#define JobObjectSecurityLimitInformation 5 // JOBOBJECT_SECURITY_LIMIT_INFORMATION
-#define JobObjectEndOfJobTimeInformation 6 // JOBOBJECT_END_OF_JOB_TIME_INFORMATION
-#define JobObjectAssociateCompletionPortInformation 7 // JOBOBJECT_ASSOCIATE_COMPLETION_PORT
-#define JobObjectBasicAndIoAccountingInformation 8 // JOBOBJECT_BASIC_AND_IO_ACCOUNTING_INFORMATION
-#define JobObjectExtendedLimitInformation 9 // JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-#define JobObjectJobSetInformation 10 // JOBOBJECT_JOBSET_INFORMATION
-#define JobObjectGroupInformation 11 // USHORT
-#define JobObjectNotificationLimitInformation 12 // JOBOBJECT_NOTIFICATION_LIMIT_INFORMATION
-#define JobObjectLimitViolationInformation 13 // JOBOBJECT_LIMIT_VIOLATION_INFORMATION
-#define JobObjectGroupInformationEx 14 // GROUP_AFFINITY (ARRAY)
-#define JobObjectCpuRateControlInformation 15 // JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
-#define JobObjectCompletionFilter 16
-#define JobObjectCompletionCounter 17
-#define JobObjectFreezeInformation 18 // JOBOBJECT_FREEZE_INFORMATION
-#define JobObjectExtendedAccountingInformation 19 // JOBOBJECT_EXTENDED_ACCOUNTING_INFORMATION
-#define JobObjectWakeInformation 20 // JOBOBJECT_WAKE_INFORMATION
-#define JobObjectBackgroundInformation 21
-#define JobObjectSchedulingRankBiasInformation 22
-#define JobObjectTimerVirtualizationInformation 23
-#define JobObjectCycleTimeNotification 24
-#define JobObjectClearEvent 25
-#define JobObjectInterferenceInformation 26 // JOBOBJECT_INTERFERENCE_INFORMATION
-#define JobObjectClearPeakJobMemoryUsed 27
-#define JobObjectMemoryUsageInformation 28 // JOBOBJECT_MEMORY_USAGE_INFORMATION // JOBOBJECT_MEMORY_USAGE_INFORMATION_V2
-#define JobObjectSharedCommit 29
-#define JobObjectContainerId 30
-#define JobObjectIoRateControlInformation 31
-#define JobObjectNetRateControlInformation 32 // JOBOBJECT_NET_RATE_CONTROL_INFORMATION
-#define JobObjectNotificationLimitInformation2 33 // JOBOBJECT_NOTIFICATION_LIMIT_INFORMATION_2
-#define JobObjectLimitViolationInformation2 34 // JOBOBJECT_LIMIT_VIOLATION_INFORMATION_2
-#define JobObjectCreateSilo 35
-#define JobObjectSiloBasicInformation 36 // SILOOBJECT_BASIC_INFORMATION
-#define JobObjectSiloRootDirectory 37 // SILOOBJECT_ROOT_DIRECTORY
-#define JobObjectServerSiloBasicInformation 38 // SERVERSILO_BASIC_INFORMATION
-#define JobObjectServerSiloUserSharedData 39 // SILO_USER_SHARED_DATA
-#define JobObjectServerSiloInitialize 40
-#define JobObjectServerSiloRunningState 41
-#define JobObjectIoAttribution 42
-#define JobObjectMemoryPartitionInformation 43
-#define JobObjectContainerTelemetryId 44
-#define JobObjectSiloSystemRoot 45
-#define JobObjectEnergyTrackingState 46 // JOBOBJECT_ENERGY_TRACKING_STATE
-#define JobObjectThreadImpersonationInformation 47
-#define JobObjectIoPriorityLimit 48
-#define JobObjectPagePriorityLimit 49
-#define MaxJobObjectInfoClass 50
+#define JobObjectBasicAccountingInformation         ((_JOBOBJECTINFOCLASS)1 )// JOBOBJECT_BASIC_ACCOUNTING_INFORMATION
+#define JobObjectBasicLimitInformation              ((_JOBOBJECTINFOCLASS)2 )// JOBOBJECT_BASIC_LIMIT_INFORMATION
+#define JobObjectBasicProcessIdList                 ((_JOBOBJECTINFOCLASS)3 )// JOBOBJECT_BASIC_PROCESS_ID_LIST
+#define JobObjectBasicUIRestrictions                ((_JOBOBJECTINFOCLASS)4 )// JOBOBJECT_BASIC_UI_RESTRICTIONS
+#define JobObjectSecurityLimitInformation           ((_JOBOBJECTINFOCLASS)5 )// JOBOBJECT_SECURITY_LIMIT_INFORMATION
+#define JobObjectEndOfJobTimeInformation            ((_JOBOBJECTINFOCLASS)6 )// JOBOBJECT_END_OF_JOB_TIME_INFORMATION
+#define JobObjectAssociateCompletionPortInformation ((_JOBOBJECTINFOCLASS)7 )// JOBOBJECT_ASSOCIATE_COMPLETION_PORT
+#define JobObjectBasicAndIoAccountingInformation    ((_JOBOBJECTINFOCLASS)8 )// JOBOBJECT_BASIC_AND_IO_ACCOUNTING_INFORMATION
+#define JobObjectExtendedLimitInformation           ((_JOBOBJECTINFOCLASS)9 )// JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+#define JobObjectJobSetInformation                  ((_JOBOBJECTINFOCLASS)10) // JOBOBJECT_JOBSET_INFORMATION
+#define JobObjectGroupInformation                   ((_JOBOBJECTINFOCLASS)11) // USHORT
+#define JobObjectNotificationLimitInformation       ((_JOBOBJECTINFOCLASS)12) // JOBOBJECT_NOTIFICATION_LIMIT_INFORMATION
+#define JobObjectLimitViolationInformation          ((_JOBOBJECTINFOCLASS)13) // JOBOBJECT_LIMIT_VIOLATION_INFORMATION
+#define JobObjectGroupInformationEx                 ((_JOBOBJECTINFOCLASS)14) // GROUP_AFFINITY (ARRAY)
+#define JobObjectCpuRateControlInformation          ((_JOBOBJECTINFOCLASS)15) // JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
+#define JobObjectCompletionFilter                   ((_JOBOBJECTINFOCLASS)16)
+#define JobObjectCompletionCounter                  ((_JOBOBJECTINFOCLASS)17)
+#define JobObjectFreezeInformation                  ((_JOBOBJECTINFOCLASS)18) // JOBOBJECT_FREEZE_INFORMATION
+#define JobObjectExtendedAccountingInformation      ((_JOBOBJECTINFOCLASS)19) // JOBOBJECT_EXTENDED_ACCOUNTING_INFORMATION
+#define JobObjectWakeInformation                    ((_JOBOBJECTINFOCLASS)20) // JOBOBJECT_WAKE_INFORMATION
+#define JobObjectBackgroundInformation              ((_JOBOBJECTINFOCLASS)21)
+#define JobObjectSchedulingRankBiasInformation      ((_JOBOBJECTINFOCLASS)22)
+#define JobObjectTimerVirtualizationInformation     ((_JOBOBJECTINFOCLASS)23)
+#define JobObjectCycleTimeNotification              ((_JOBOBJECTINFOCLASS)24)
+#define JobObjectClearEvent                         ((_JOBOBJECTINFOCLASS)25)
+#define JobObjectInterferenceInformation            ((_JOBOBJECTINFOCLASS)26) // JOBOBJECT_INTERFERENCE_INFORMATION
+#define JobObjectClearPeakJobMemoryUsed             ((_JOBOBJECTINFOCLASS)27)
+#define JobObjectMemoryUsageInformation             ((_JOBOBJECTINFOCLASS)28) // JOBOBJECT_MEMORY_USAGE_INFORMATION // JOBOBJECT_MEMORY_USAGE_INFORMATION_V2
+#define JobObjectSharedCommit                       ((_JOBOBJECTINFOCLASS)29)
+#define JobObjectContainerId                        ((_JOBOBJECTINFOCLASS)30)
+#define JobObjectIoRateControlInformation           ((_JOBOBJECTINFOCLASS)31)
+#define JobObjectNetRateControlInformation          ((_JOBOBJECTINFOCLASS)32) // JOBOBJECT_NET_RATE_CONTROL_INFORMATION
+#define JobObjectNotificationLimitInformation2      ((_JOBOBJECTINFOCLASS)33) // JOBOBJECT_NOTIFICATION_LIMIT_INFORMATION_2
+#define JobObjectLimitViolationInformation2         ((_JOBOBJECTINFOCLASS)34) // JOBOBJECT_LIMIT_VIOLATION_INFORMATION_2
+#define JobObjectCreateSilo                         ((_JOBOBJECTINFOCLASS)35)
+#define JobObjectSiloBasicInformation               ((_JOBOBJECTINFOCLASS)36) // SILOOBJECT_BASIC_INFORMATION
+#define JobObjectSiloRootDirectory                  ((_JOBOBJECTINFOCLASS)37) // SILOOBJECT_ROOT_DIRECTORY
+#define JobObjectServerSiloBasicInformation         ((_JOBOBJECTINFOCLASS)38) // SERVERSILO_BASIC_INFORMATION
+#define JobObjectServerSiloUserSharedData           ((_JOBOBJECTINFOCLASS)39) // SILO_USER_SHARED_DATA
+#define JobObjectServerSiloInitialize               ((_JOBOBJECTINFOCLASS)40)
+#define JobObjectServerSiloRunningState             ((_JOBOBJECTINFOCLASS)41)
+#define JobObjectIoAttribution                      ((_JOBOBJECTINFOCLASS)42)
+#define JobObjectMemoryPartitionInformation         ((_JOBOBJECTINFOCLASS)43)
+#define JobObjectContainerTelemetryId               ((_JOBOBJECTINFOCLASS)44)
+#define JobObjectSiloSystemRoot                     ((_JOBOBJECTINFOCLASS)45)
+#define JobObjectEnergyTrackingState                ((_JOBOBJECTINFOCLASS)46) // JOBOBJECT_ENERGY_TRACKING_STATE
+#define JobObjectThreadImpersonationInformation     ((_JOBOBJECTINFOCLASS)47)
+#define JobObjectIoPriorityLimit                    ((_JOBOBJECTINFOCLASS)48)
+#define JobObjectPagePriorityLimit                  ((_JOBOBJECTINFOCLASS)49)
+#define MaxJobObjectInfoClass                       ((_JOBOBJECTINFOCLASS)50)
 #endif // _KERNEL_MODE
 
 #ifdef _KERNEL_MODE
@@ -3265,7 +3561,13 @@ typedef struct _JOBOBJECT_MEMORY_USAGE_INFORMATION_V2
     ULONG64 Reserved[2];
 } JOBOBJECT_MEMORY_USAGE_INFORMATION_V2, * PJOBOBJECT_MEMORY_USAGE_INFORMATION_V2;
 
+#if (NTDDI_VERSION != NTDDI_WIN10_RS1)
 // private
+//
+// Define data shared between kernel and user mode per each Silo.
+//
+// N.B. User mode has read only access to this data
+//
 typedef struct _SILO_USER_SHARED_DATA
 {
     ULONG64 ServiceSessionId;
@@ -3278,13 +3580,16 @@ typedef struct _SILO_USER_SHARED_DATA
     WCHAR NtSystemRoot[260];
     USHORT UserModeGlobalLogger[16];
 } SILO_USER_SHARED_DATA, * PSILO_USER_SHARED_DATA;
+#endif // WDK_NTDDI_VERSION != NTDDI_WIN10_RS1
 
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS1)
 // private
 typedef struct _SILOOBJECT_ROOT_DIRECTORY
 {
     ULONG ControlFlags;
     UNICODE_STRING Path;
 } SILOOBJECT_ROOT_DIRECTORY, * PSILOOBJECT_ROOT_DIRECTORY;
+#endif // NTDDI_VERSION >= NTDDI_WIN10_RS1
 
 // private
 typedef struct _JOBOBJECT_ENERGY_TRACKING_STATE
@@ -3505,9 +3810,35 @@ ZwAllocateReserveObject(
 );
 #endif
 
+// Process snapshotting
+
+#ifndef _KERNEL_MODE
+#if (NTDDI_VERSION >= NTDDI_WINBLUE)
+// rev
+NTSYSCALLAPI
+NTSTATUS
+NTAPI
+PssNtCaptureSnapshot(
+    _Out_ PHANDLE SnapshotHandle,
+    _In_ HANDLE ProcessHandle,
+    _In_ ULONG CaptureFlags,
+    _In_ ULONG ThreadContextFlags
+);
+#endif
+#endif // !_KERNEL_MODE
+
 #ifdef _KERNEL_MODE
 
 // Process
+
+NTKERNELAPI
+NTSTATUS
+NTAPI
+PsLookupProcessThreadByCid(
+    _In_ PCLIENT_ID ClientId,
+    _Out_opt_ PEPROCESS* Process,
+    _Out_ PETHREAD* Thread
+);
 
 NTSYSAPI
 BOOLEAN
@@ -3671,6 +4002,20 @@ PsResumeProcess(
     _In_ PEPROCESS Process
 );
 
+NTKERNELAPI
+NTSTATUS
+NTAPI
+PsAcquireProcessExitSynchronization(
+    _In_ PEPROCESS Process
+);
+
+NTKERNELAPI
+VOID
+NTAPI
+PsReleaseProcessExitSynchronization(
+    _In_ PEPROCESS Process
+);
+
 // Job
 
 NTSYSAPI
@@ -3737,63 +4082,61 @@ PsReferenceProcessFilePointer(
 
 // Thread
 
-NTSYSAPI
+NTKERNELAPI
 BOOLEAN
-NTAPI
 PsIsSystemThread(
     _In_ PETHREAD Thread
 );
 
-NTSYSAPI
+_IRQL_requires_max_(DISPATCH_LEVEL)
+NTKERNELAPI
 BOOLEAN
-NTAPI
 PsIsThreadTerminating(
     _In_ PETHREAD Thread
 );
 
-NTSYSAPI
+NTKERNELAPI
 BOOLEAN
 NTAPI
 PsIsThreadImpersonating(
     _In_ PETHREAD Thread
 );
 
-NTSYSAPI
+NTKERNELAPI
 PVOID
 NTAPI
 PsGetCurrentThreadStackLimit(
     VOID
 );
 
-NTSYSAPI
+NTKERNELAPI
 PVOID
 NTAPI
 PsGetCurrentThreadStackBase(
     VOID
 );
 
-NTSYSAPI
+NTKERNELAPI
 KPROCESSOR_MODE
 NTAPI
 PsGetCurrentThreadPreviousMode(
     VOID
 );
 
-NTSYSAPI
+NTKERNELAPI
 PEPROCESS
-NTAPI
 PsGetThreadProcess(
     _In_ PETHREAD Thread
 );
 
-NTSYSAPI
+NTKERNELAPI
 PEPROCESS
 NTAPI
 PsGetCurrentThreadProcess(
     VOID
 );
 
-NTSYSAPI
+NTKERNELAPI
 HANDLE
 NTAPI
 PsGetCurrentThreadProcessId(
@@ -3811,14 +4154,14 @@ PsGetThreadClientId(
     return ClientId;
 }
 
-NTSYSAPI
+NTKERNELAPI
 ULONG
 NTAPI
 PsGetThreadSessionId(
     _In_ PETHREAD Thread
 );
 
-NTSYSAPI
+NTKERNELAPI
 NTSTATUS
 NTAPI
 PsSetContextThread(
@@ -3827,7 +4170,7 @@ PsSetContextThread(
     _In_ KPROCESSOR_MODE Mode
 );
 
-NTSYSAPI
+NTKERNELAPI
 NTSTATUS
 NTAPI
 PsGetContextThread(
@@ -3836,7 +4179,7 @@ PsGetContextThread(
     _In_ KPROCESSOR_MODE Mode
 );
 
-NTSYSAPI
+NTKERNELAPI
 VOID
 NTAPI
 PsSetThreadWin32Thread(
@@ -3845,44 +4188,44 @@ PsSetThreadWin32Thread(
     _In_ PVOID PrevWin32Thread
 );
 
-NTSYSAPI
+NTKERNELAPI
 PVOID
 NTAPI
 PsGetThreadWin32Thread(
     _In_ PETHREAD Thread
 );
 
-NTSYSAPI
+NTKERNELAPI
 PVOID
 NTAPI
 PsGetCurrentThreadWin32Thread(
     VOID
 );
 
-NTSYSAPI
+NTKERNELAPI
 PVOID
 NTAPI
 PsGetCurrentThreadWin32ThreadAndEnterCriticalRegion(
-    __out PHANDLE ProcessId
+    _Out_ PHANDLE ProcessId
 );
 
 #define PsGetThreadTcb(Thread) ((PKTHREAD)(Thread))
 
-NTSYSAPI
+NTKERNELAPI
 PVOID
 NTAPI
 PsGetThreadTeb(
     _In_ PETHREAD Thread
 );
 
-NTSYSAPI
+NTKERNELAPI
 CCHAR
 NTAPI
 PsGetThreadFreezeCount(
     _In_ PETHREAD Thread
 );
 
-NTSYSAPI
+NTKERNELAPI
 BOOLEAN
 NTAPI
 PsGetThreadHardErrorsAreDisabled(

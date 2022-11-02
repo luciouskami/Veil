@@ -47,6 +47,77 @@
 
 VEIL_BEGIN()
 
+#define PAGE_NOACCESS           0x01    
+#define PAGE_READONLY           0x02    
+#define PAGE_READWRITE          0x04    
+#define PAGE_WRITECOPY          0x08    
+#define PAGE_EXECUTE            0x10    
+#define PAGE_EXECUTE_READ       0x20    
+#define PAGE_EXECUTE_READWRITE  0x40    
+#define PAGE_EXECUTE_WRITECOPY  0x80    
+#define PAGE_GUARD             0x100    
+#define PAGE_NOCACHE           0x200    
+#define PAGE_WRITECOMBINE      0x400    
+#define PAGE_GRAPHICS_NOACCESS           0x0800    
+#define PAGE_GRAPHICS_READONLY           0x1000    
+#define PAGE_GRAPHICS_READWRITE          0x2000    
+#define PAGE_GRAPHICS_EXECUTE            0x4000    
+#define PAGE_GRAPHICS_EXECUTE_READ       0x8000    
+#define PAGE_GRAPHICS_EXECUTE_READWRITE 0x10000    
+#define PAGE_GRAPHICS_COHERENT          0x20000    
+#define PAGE_GRAPHICS_NOCACHE           0x40000    
+#define PAGE_ENCLAVE_THREAD_CONTROL 0x80000000  
+#define PAGE_REVERT_TO_FILE_MAP     0x80000000  
+#define PAGE_TARGETS_NO_UPDATE      0x40000000  
+#define PAGE_TARGETS_INVALID        0x40000000  
+#define PAGE_ENCLAVE_UNVALIDATED    0x20000000  
+#define PAGE_ENCLAVE_MASK           0x10000000  
+#ifndef PAGE_ENCLAVE_DECOMMIT
+#define PAGE_ENCLAVE_DECOMMIT       (PAGE_ENCLAVE_MASK | 0) 
+#endif
+#define PAGE_ENCLAVE_SS_FIRST       (PAGE_ENCLAVE_MASK | 1) 
+#define PAGE_ENCLAVE_SS_REST        (PAGE_ENCLAVE_MASK | 2) 
+
+#define MEM_COMMIT                      0x00001000  
+#define MEM_RESERVE                     0x00002000  
+#define MEM_DECOMMIT                    0x00004000  
+#define MEM_RELEASE                     0x00008000  
+#define MEM_FREE                        0x00010000  
+#define MEM_PRIVATE                     0x00020000  
+#define MEM_MAPPED                      0x00040000  
+#define MEM_RESET                       0x00080000  
+#define MEM_TOP_DOWN                    0x00100000  
+#define MEM_WRITE_WATCH                 0x00200000  
+#define MEM_PHYSICAL                    0x00400000  
+#define MEM_ROTATE                      0x00800000  
+#define MEM_DIFFERENT_IMAGE_BASE_OK     0x00800000  
+#define MEM_RESET_UNDO                  0x01000000  
+#define MEM_LARGE_PAGES                 0x20000000  
+#define MEM_DOS_LIM                     0x40000000  
+#define MEM_4MB_PAGES                   0x80000000  
+#define MEM_64K_PAGES                   (MEM_LARGE_PAGES | MEM_PHYSICAL)  
+#define MEM_UNMAP_WITH_TRANSIENT_BOOST  0x00000001  
+#define MEM_COALESCE_PLACEHOLDERS       0x00000001  
+#define MEM_PRESERVE_PLACEHOLDER        0x00000002  
+#define MEM_REPLACE_PLACEHOLDER         0x00004000  
+#define MEM_RESERVE_PLACEHOLDER         0x00040000  
+
+#define SEC_HUGE_PAGES                  0x00020000  
+#define SEC_PARTITION_OWNER_HANDLE      0x00040000  
+#define SEC_64K_PAGES                   0x00080000  
+#define SEC_BASED                       0x00200000  
+#define SEC_NO_CHANGE                   0x00400000  
+#define SEC_FILE                        0x00800000  
+#define SEC_IMAGE                       0x01000000  
+#define SEC_PROTECTED_IMAGE             0x02000000  
+#define SEC_RESERVE                     0x04000000  
+#define SEC_COMMIT                      0x08000000  
+#define SEC_NOCACHE                     0x10000000  
+#define SEC_GLOBAL                      0x20000000  
+#define SEC_WRITECOMBINE                0x40000000  
+#define SEC_LARGE_PAGES                 0x80000000  
+#define SEC_IMAGE_NO_EXECUTE (SEC_IMAGE | SEC_NOCACHE)  
+
 #ifdef _KERNEL_MODE
 #define MEM_IMAGE SEC_IMAGE
 #endif
@@ -55,37 +126,37 @@ VEIL_BEGIN()
 #ifndef _KERNEL_MODE
 typedef enum _MEMORY_INFORMATION_CLASS
 {
-    MemoryBasicInformation, // MEMORY_BASIC_INFORMATION
-    MemoryWorkingSetInformation, // MEMORY_WORKING_SET_INFORMATION
-    MemoryMappedFilenameInformation, // UNICODE_STRING
-    MemoryRegionInformation, // MEMORY_REGION_INFORMATION
-    MemoryWorkingSetExInformation, // MEMORY_WORKING_SET_EX_INFORMATION
-    MemorySharedCommitInformation, // MEMORY_SHARED_COMMIT_INFORMATION
-    MemoryImageInformation, // MEMORY_IMAGE_INFORMATION
-    MemoryRegionInformationEx, // MEMORY_REGION_INFORMATION
+    MemoryBasicInformation,                 // MEMORY_BASIC_INFORMATION
+    MemoryWorkingSetInformation,            // MEMORY_WORKING_SET_INFORMATION
+    MemoryMappedFileNameInformation,        // UNICODE_STRING
+    MemoryRegionInformation,                // MEMORY_REGION_INFORMATION
+    MemoryWorkingSetExInformation,          // MEMORY_WORKING_SET_EX_INFORMATION // since VISTA
+    MemorySharedCommitInformation,          // MEMORY_SHARED_COMMIT_INFORMATION // since WIN8
+    MemoryImageInformation,                 // MEMORY_IMAGE_INFORMATION
+    MemoryRegionInformationEx,              // MEMORY_REGION_INFORMATION
     MemoryPrivilegedBasicInformation,
-    MemoryEnclaveImageInformation, // MEMORY_ENCLAVE_IMAGE_INFORMATION // since REDSTONE3
-    MemoryBasicInformationCapped, // 10
-    MemoryPhysicalContiguityInformation, // MEMORY_PHYSICAL_CONTIGUITY_INFORMATION // since 20H1
-    MemoryBadInformation, // since WIN11
-    MemoryBadInformationAllProcesses, // since 22H1
+    MemoryEnclaveImageInformation,          // MEMORY_ENCLAVE_IMAGE_INFORMATION // since REDSTONE3
+    MemoryBasicInformationCapped,           // 10
+    MemoryPhysicalContiguityInformation,    // MEMORY_PHYSICAL_CONTIGUITY_INFORMATION // since 20H1
+    MemoryBadInformation,                   // since WIN11
+    MemoryBadInformationAllProcesses,       // since 22H1
     MaxMemoryInfoClass
 } MEMORY_INFORMATION_CLASS;
 #else
-#define MemoryBasicInformation              0x0
-#define MemoryWorkingSetInformation         0x1
-#define MemoryMappedFilenameInformation     0x2
-#define MemoryRegionInformation             0x3
-#define MemoryWorkingSetExInformation       0x4
-#define MemorySharedCommitInformation       0x5
-#define MemoryImageInformation              0x6
-#define MemoryRegionInformationEx           0x7
-#define MemoryPrivilegedBasicInformation    0x8
-#define MemoryEnclaveImageInformation       0x9
-#define MemoryBasicInformationCapped        0xA
-#define MemoryPhysicalContiguityInformation 0xB
-#define MemoryBadInformation                0xC
-#define MemoryBadInformationAllProcesses    0xD
+#define MemoryBasicInformation              ((_MEMORY_INFORMATION_CLASS)0x0)
+#define MemoryWorkingSetInformation         ((_MEMORY_INFORMATION_CLASS)0x1)
+#define MemoryMappedFileNameInformation     ((_MEMORY_INFORMATION_CLASS)0x2)
+#define MemoryRegionInformation             ((_MEMORY_INFORMATION_CLASS)0x3)
+#define MemoryWorkingSetExInformation       ((_MEMORY_INFORMATION_CLASS)0x4)
+#define MemorySharedCommitInformation       ((_MEMORY_INFORMATION_CLASS)0x5)
+#define MemoryImageInformation              ((_MEMORY_INFORMATION_CLASS)0x6)
+#define MemoryRegionInformationEx           ((_MEMORY_INFORMATION_CLASS)0x7)
+#define MemoryPrivilegedBasicInformation    ((_MEMORY_INFORMATION_CLASS)0x8)
+#define MemoryEnclaveImageInformation       ((_MEMORY_INFORMATION_CLASS)0x9)
+#define MemoryBasicInformationCapped        ((_MEMORY_INFORMATION_CLASS)0xA)
+#define MemoryPhysicalContiguityInformation ((_MEMORY_INFORMATION_CLASS)0xB)
+#define MemoryBadInformation                ((_MEMORY_INFORMATION_CLASS)0xC)
+#define MemoryBadInformationAllProcesses    ((_MEMORY_INFORMATION_CLASS)0xD)
 #endif // !_KERNEL_MODE
 
 typedef struct _MEMORY_WORKING_SET_BLOCK
@@ -372,7 +443,7 @@ typedef enum _SECTION_INFORMATION_CLASS
 {
     SectionBasicInformation, // q; SECTION_BASIC_INFORMATION
     SectionImageInformation, // q; SECTION_IMAGE_INFORMATION
-    SectionRelocationInformation, // q; PVOID RelocationAddress // name:wow64:whNtQuerySection_SectionRelocationInformation
+    SectionRelocationInformation, // q; PVOID RelocationAddress // name:wow64:whNtQuerySection_SectionRelocationInformation // since WIN7
     SectionOriginalBaseInformation, // PVOID BaseAddress
     SectionInternalImageInformation, // SECTION_INTERNAL_IMAGE_INFORMATION // since REDSTONE2
     MaxSectionInfoClass
@@ -505,7 +576,129 @@ ZwAllocateVirtualMemory(
     _In_ ULONG Protect
 );
 
-#if (NTDDI_VERSION >= NTDDI_WIN10_RS5)
+#if (WDK_NTDDI_VERSION <= NTDDI_WIN10_RS4)
+
+typedef struct _MEM_ADDRESS_REQUIREMENTS {
+    PVOID LowestStartingAddress;
+    PVOID HighestEndingAddress;
+    SIZE_T Alignment;
+} MEM_ADDRESS_REQUIREMENTS, * PMEM_ADDRESS_REQUIREMENTS;
+
+#define MEM_EXTENDED_PARAMETER_GRAPHICS                 0x00000001
+#define MEM_EXTENDED_PARAMETER_NONPAGED                 0x00000002
+#define MEM_EXTENDED_PARAMETER_ZERO_PAGES_OPTIONAL      0x00000004
+#define MEM_EXTENDED_PARAMETER_NONPAGED_LARGE           0x00000008
+#define MEM_EXTENDED_PARAMETER_NONPAGED_HUGE            0x00000010
+#define MEM_EXTENDED_PARAMETER_SOFT_FAULT_PAGES         0x00000020
+#define MEM_EXTENDED_PARAMETER_EC_CODE                  0x00000040
+
+//
+// Use the high ULONG64 bit of the MEM_EXTENDED_PARAMETER to indicate
+// that the supplied NUMA node in the low bits is mandatory.  Note this
+// is different from the MEM_EXTENDED_PARAMETER_XXX fields above because
+// those are encoded in the Type field; this is encoded in the ULong64 field.
+//
+// This can only be used nonpaged allocations since we don't want page
+// faults to fail due to transient memory shortages on arbitrary nodes.
+//
+
+#define MEM_EXTENDED_PARAMETER_NUMA_NODE_MANDATORY      MINLONG64
+
+typedef enum MEM_EXTENDED_PARAMETER_TYPE {
+    MemExtendedParameterInvalidType = 0,
+    MemExtendedParameterAddressRequirements,
+    MemExtendedParameterNumaNode,
+    MemExtendedParameterPartitionHandle,
+    MemExtendedParameterUserPhysicalHandle,
+    MemExtendedParameterAttributeFlags,
+    MemExtendedParameterImageMachine,
+    MemExtendedParameterMax
+} MEM_EXTENDED_PARAMETER_TYPE, * PMEM_EXTENDED_PARAMETER_TYPE;
+
+#define MEM_EXTENDED_PARAMETER_TYPE_BITS    8
+
+typedef struct DECLSPEC_ALIGN(8) MEM_EXTENDED_PARAMETER {
+
+    struct {
+        ULONG64 Type : MEM_EXTENDED_PARAMETER_TYPE_BITS;
+        ULONG64 Reserved : 64 - MEM_EXTENDED_PARAMETER_TYPE_BITS;
+    } DUMMYSTRUCTNAME;
+
+    union {
+        ULONG64 ULong64;
+        PVOID Pointer;
+        SIZE_T Size;
+        HANDLE Handle;
+        ULONG ULong;
+    } DUMMYUNIONNAME;
+
+} MEM_EXTENDED_PARAMETER, * PMEM_EXTENDED_PARAMETER;
+
+#define MEMORY_CURRENT_PARTITION_HANDLE         ((HANDLE) (LONG_PTR) -1)
+#define MEMORY_SYSTEM_PARTITION_HANDLE          ((HANDLE) (LONG_PTR) -2)
+#define MEMORY_EXISTING_VAD_PARTITION_HANDLE    ((HANDLE) (LONG_PTR) -3)
+
+//
+// Dedicated memory attributes.
+//
+
+#define MEM_DEDICATED_ATTRIBUTE_NOT_SPECIFIED   ((ULONG64) -1)
+
+typedef enum _MEM_DEDICATED_ATTRIBUTE_TYPE {
+    MemDedicatedAttributeReadBandwidth = 0,
+    MemDedicatedAttributeReadLatency,
+    MemDedicatedAttributeWriteBandwidth,
+    MemDedicatedAttributeWriteLatency,
+    MemDedicatedAttributeMax
+} MEM_DEDICATED_ATTRIBUTE_TYPE, * PMEM_DEDICATED_ATTRIBUTE_TYPE;
+
+
+
+typedef struct _MEMORY_PARTITION_DEDICATED_MEMORY_OPEN_INFORMATION {
+
+    //
+    // Type identifier of the dedicated memory to open.
+    //
+
+    ULONG64 DedicatedMemoryTypeId;
+
+    //
+    // Attributes and desired access for the new handle to be opened and stored
+    // in DedicatedMemoryPartitionHandle.
+    //
+
+    ULONG HandleAttributes;
+    ACCESS_MASK DesiredAccess;
+
+    //
+    // Returned handle to the opened dedicated memory partition.
+    //
+
+    HANDLE DedicatedMemoryPartitionHandle;
+
+} MEMORY_PARTITION_DEDICATED_MEMORY_OPEN_INFORMATION, * PMEMORY_PARTITION_DEDICATED_MEMORY_OPEN_INFORMATION;
+
+#define SEC_HUGE_PAGES              0x00020000  
+#define SEC_64K_PAGES               0x00080000  
+#define SEC_FILE                    0x00800000  
+#define SEC_IMAGE                   0x01000000  
+#define SEC_RESERVE                 0x04000000  
+#define SEC_COMMIT                  0x08000000  
+#define SEC_NOCACHE                 0x10000000  
+#define SEC_LARGE_PAGES             0x80000000  
+#define SEC_IMAGE_NO_EXECUTE (SEC_IMAGE | SEC_NOCACHE)  
+
+typedef enum MEM_SECTION_EXTENDED_PARAMETER_TYPE {
+    MemSectionExtendedParameterInvalidType = 0,
+    MemSectionExtendedParameterUserPhysicalFlags,
+    MemSectionExtendedParameterNumaNode,
+    MemSectionExtendedParameterSigningLevel,
+    MemSectionExtendedParameterMax
+} MEM_SECTION_EXTENDED_PARAMETER_TYPE, * PMEM_SECTION_EXTENDED_PARAMETER_TYPE;
+
+#endif // WDK_NTDDI_VERSION <= NTDDI_WIN10_RS4
+
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS4)
 _Must_inspect_result_
 __drv_allocatesMem(Mem)
 __kernel_entry NTSYSCALLAPI
@@ -536,7 +729,7 @@ ZwAllocateVirtualMemoryEx(
     _Inout_updates_opt_(ExtendedParameterCount) PMEM_EXTENDED_PARAMETER ExtendedParameters,
     _In_ ULONG ExtendedParameterCount
 );
-#endif
+#endif // NTDDI_VERSION >= NTDDI_WIN10_RS4
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -707,28 +900,28 @@ ZwFlushVirtualMemory(
 
 // begin_private
 #ifndef _KERNEL_MODE
-typedef enum class _VIRTUAL_MEMORY_INFORMATION_CLASS
+typedef enum _VIRTUAL_MEMORY_INFORMATION_CLASS
 {
-    VmPrefetchInformation, // ULONG
-    VmPagePriorityInformation, // OFFER_PRIORITY
-    VmCfgCallTargetInformation, // CFG_CALL_TARGET_LIST_INFORMATION // REDSTONE2
-    VmPageDirtyStateInformation, // REDSTONE3
-    VmImageHotPatchInformation, // 19H1
-    VmPhysicalContiguityInformation, // 20H1
+    VmPrefetchInformation,                  // ULONG
+    VmPagePriorityInformation,              // OFFER_PRIORITY
+    VmCfgCallTargetInformation,             // CFG_CALL_TARGET_LIST_INFORMATION // REDSTONE2
+    VmPageDirtyStateInformation,            // REDSTONE3
+    VmImageHotPatchInformation,             // 19H1
+    VmPhysicalContiguityInformation,        // 20H1
     VmVirtualMachinePrepopulateInformation,
     VmRemoveFromWorkingSetInformation,
     MaxVmInfoClass
 } VIRTUAL_MEMORY_INFORMATION_CLASS;
 #else
-#define VmPrefetchInformation                   0
-#define VmPagePriorityInformation               1
-#define VmCfgCallTargetInformation              2
-#define VmPageDirtyStateInformation             3
-#define VmImageHotPatchInformation              4
-#define VmPhysicalContiguityInformation         5
-#define VmVirtualMachinePrepopulateInformation  6
-#define VmRemoveFromWorkingSetInformation       7
-#define MaxVmInfoClass                          8
+#define VmPrefetchInformation                   ((_VIRTUAL_MEMORY_INFORMATION_CLASS)0)
+#define VmPagePriorityInformation               ((_VIRTUAL_MEMORY_INFORMATION_CLASS)1)
+#define VmCfgCallTargetInformation              ((_VIRTUAL_MEMORY_INFORMATION_CLASS)2)
+#define VmPageDirtyStateInformation             ((_VIRTUAL_MEMORY_INFORMATION_CLASS)3)
+#define VmImageHotPatchInformation              ((_VIRTUAL_MEMORY_INFORMATION_CLASS)4)
+#define VmPhysicalContiguityInformation         ((_VIRTUAL_MEMORY_INFORMATION_CLASS)5)
+#define VmVirtualMachinePrepopulateInformation  ((_VIRTUAL_MEMORY_INFORMATION_CLASS)6)
+#define VmRemoveFromWorkingSetInformation       ((_VIRTUAL_MEMORY_INFORMATION_CLASS)7)
+#define MaxVmInfoClass                          ((_VIRTUAL_MEMORY_INFORMATION_CLASS)8)
 #endif // !_KERNEL_MODE
 
 #ifndef _KERNEL_MODE
@@ -738,6 +931,8 @@ typedef struct _MEMORY_RANGE_ENTRY
     SIZE_T NumberOfBytes;
 } MEMORY_RANGE_ENTRY, * PMEMORY_RANGE_ENTRY;
 #endif // !_KERNEL_MODE
+
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS2)
 
 #ifdef _KERNEL_MODE
 
@@ -797,6 +992,8 @@ typedef struct _CFG_CALL_TARGET_LIST_INFORMATION
     PVOID Section; // since REDSTONE5
     ULONGLONG FileOffset;
 } CFG_CALL_TARGET_LIST_INFORMATION, * PCFG_CALL_TARGET_LIST_INFORMATION;
+
+#endif // NTDDI_VERSION >= NTDDI_WIN10_RS2
 
 // end_private
 
@@ -939,7 +1136,7 @@ ZwCreateSectionEx(
     _Inout_updates_opt_(ExtendedParameterCount) PMEM_EXTENDED_PARAMETER ExtendedParameters,
     _In_ ULONG ExtendedParameterCount
 );
-#endif
+#endif // NTDDI_VERSION >= NTDDI_WIN10_RS5
 
 _Must_inspect_result_
 __kernel_entry NTSYSCALLAPI
@@ -998,7 +1195,7 @@ ZwMapViewOfSection(
     _In_ ULONG Win32Protect
 );
 
-#if (NTDDI_VERSION >= NTDDI_WIN10_RS5)
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS4)
 _Must_inspect_result_
 _Post_satisfies_(*ViewSize >= _Old_(*ViewSize))
 __kernel_entry NTSYSCALLAPI
@@ -1033,7 +1230,7 @@ ZwMapViewOfSectionEx(
     _Inout_updates_opt_(ParameterCount) PMEM_EXTENDED_PARAMETER ExtendedParameters,
     _In_ ULONG ExtendedParameterCount
 );
-#endif
+#endif // NTDDI_VERSION >= NTDDI_WIN10_RS4
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -1134,7 +1331,7 @@ ZwAreMappedFilesTheSame(
 // Partitions
 //
 
-#ifndef _KERNEL_MODE
+#if !defined(_KERNEL_MODE) || (WDK_NTDDI_VERSION <= NTDDI_WIN10_VB)
 // private
 typedef enum _PARTITION_INFORMATION_CLASS
 {
@@ -1155,21 +1352,21 @@ typedef enum _PARTITION_INFORMATION_CLASS
     SystemMemoryPartitionMax
 } PARTITION_INFORMATION_CLASS, * PPARTITION_INFORMATION_CLASS;
 #else
-#define SystemMemoryPartitionInformation                0x0
-#define SystemMemoryPartitionMoveMemory                 0x1
-#define SystemMemoryPartitionAddPagefile                0x2
-#define SystemMemoryPartitionCombineMemory              0x3
-#define SystemMemoryPartitionInitialAddMemory           0x4
-#define SystemMemoryPartitionGetMemoryEvents            0x5
-#define SystemMemoryPartitionSetAttributes              0x6
-#define SystemMemoryPartitionNodeInformation            0x7
-#define SystemMemoryPartitionCreateLargePages           0x8
-#define SystemMemoryPartitionDedicatedMemoryInformation 0x9
-#define SystemMemoryPartitionOpenDedicatedMemory        0xA
-#define SystemMemoryPartitionMemoryChargeAttributes     0xB
-#define SystemMemoryPartitionClearAttributes            0xC
-#define SystemMemoryPartitionSetMemoryThresholds        0xD
-#define SystemMemoryPartitionMax                        0xE
+#define SystemMemoryPartitionInformation                ((_PARTITION_INFORMATION_CLASS)0x0)
+#define SystemMemoryPartitionMoveMemory                 ((_PARTITION_INFORMATION_CLASS)0x1)
+#define SystemMemoryPartitionAddPagefile                ((_PARTITION_INFORMATION_CLASS)0x2)
+#define SystemMemoryPartitionCombineMemory              ((_PARTITION_INFORMATION_CLASS)0x3)
+#define SystemMemoryPartitionInitialAddMemory           ((_PARTITION_INFORMATION_CLASS)0x4)
+#define SystemMemoryPartitionGetMemoryEvents            ((_PARTITION_INFORMATION_CLASS)0x5)
+#define SystemMemoryPartitionSetAttributes              ((_PARTITION_INFORMATION_CLASS)0x6)
+#define SystemMemoryPartitionNodeInformation            ((_PARTITION_INFORMATION_CLASS)0x7)
+#define SystemMemoryPartitionCreateLargePages           ((_PARTITION_INFORMATION_CLASS)0x8)
+#define SystemMemoryPartitionDedicatedMemoryInformation ((_PARTITION_INFORMATION_CLASS)0x9)
+#define SystemMemoryPartitionOpenDedicatedMemory        ((_PARTITION_INFORMATION_CLASS)0xA)
+#define SystemMemoryPartitionMemoryChargeAttributes     ((_PARTITION_INFORMATION_CLASS)0xB)
+#define SystemMemoryPartitionClearAttributes            ((_PARTITION_INFORMATION_CLASS)0xC)
+#define SystemMemoryPartitionSetMemoryThresholds        ((_PARTITION_INFORMATION_CLASS)0xD)
+#define SystemMemoryPartitionMax                        ((_PARTITION_INFORMATION_CLASS)0xE)
 #endif //!_KERNEL_MODE
 
 // private
@@ -1256,7 +1453,7 @@ typedef struct _MEMORY_PARTITION_MEMORY_EVENTS_INFORMATION
     HANDLE MaximumCommitCondition; // \KernelObjects\MaximumCommitCondition
 } MEMORY_PARTITION_MEMORY_EVENTS_INFORMATION, * PMEMORY_PARTITION_MEMORY_EVENTS_INFORMATION;
 
-#if (NTDDI_VERSION >= NTDDI_WINTHRESHOLD)
+#if (NTDDI_VERSION >= NTDDI_WIN10)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -1322,7 +1519,7 @@ ZwManagePartition(
     _Inout_updates_bytes_(PartitionInformationLength) PVOID PartitionInformation,
     _In_ ULONG PartitionInformationLength
 );
-#endif
+#endif // NTDDI_VERSION >= NTDDI_WIN10
 
 //
 // User physical pages
@@ -1385,7 +1582,7 @@ ZwAllocateUserPhysicalPages(
     _Out_writes_(*NumberOfPages) PULONG_PTR UserPfnArray
 );
 
-#if (NTDDI_VERSION >= NTDDI_WINTHRESHOLD)
+#if (NTDDI_VERSION >= NTDDI_WIN10_VB)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -1408,7 +1605,7 @@ ZwAllocateUserPhysicalPagesEx(
     _Inout_updates_opt_(ParameterCount) PMEM_EXTENDED_PARAMETER ExtendedParameters,
     _In_ ULONG ExtendedParameterCount
 );
-#endif
+#endif // NTDDI_VERSION >= NTDDI_WIN10_VB
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -1536,6 +1733,7 @@ ZwFlushWriteBuffer(
 // Enclave support
 //
 
+#if (NTDDI_VERSION >= NTDDI_WIN10_TH2)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -1621,6 +1819,10 @@ ZwInitializeEnclave(
     _Out_opt_ PULONG EnclaveError
 );
 
+#endif // NTDDI_VERSION >= NTDDI_WIN10_TH2
+
+#if (NTDDI_VERSION >= NTDDI_WIN10_RS3)
+
 // rev
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -1670,6 +1872,8 @@ ZwCallEnclave(
     _Out_opt_ PVOID* ReturnValue
 );
 
+#endif // NTDDI_VERSION >= NTDDI_VERSION_RS3
+
 //
 // Only Kernel
 //
@@ -1716,17 +1920,17 @@ MmUnmapViewOfSection(
     _In_ PVOID BaseAddress
 );
 
-NTSYSAPI
+_IRQL_requires_max_(APC_LEVEL)
+NTKERNELAPI
 BOOLEAN
-NTAPI
 MmForceSectionClosed(
     _In_ PSECTION_OBJECT_POINTERS SectionObjectPointer,
     _In_ BOOLEAN DelayClose
 );
 
-NTSYSAPI
+_IRQL_requires_max_(APC_LEVEL)
+NTKERNELAPI
 BOOLEAN
-NTAPI
 MmForceSectionClosedEx(
     _In_ PSECTION_OBJECT_POINTERS SectionObjectPointer,
     _In_ ULONG ForceCloseFlags

@@ -145,27 +145,29 @@ typedef enum _LDR_HOT_PATCH_STATE
 } LDR_HOT_PATCH_STATE, * PLDR_HOT_PATCH_STATE;
 
 #define LDRP_PACKAGED_BINARY            0x00000001
-#define LDRP_STATIC_LINK                0x00000002
+#define LDRP_MARKED_FOR_REMOVAL         0x00000002
 #define LDRP_IMAGE_DLL                  0x00000004
+#define LDRP_LOAD_NOTIFICATIONS_SENT    0x00000008
+#define LDRP_TELEMETRY_ENTRY_PROCESSED  0x00000010
+#define LDRP_PROCESS_STATIC_IMPORT      0x00000020
+#define LDRP_IN_LEGACY_LISTS            0x00000040
+#define LDRP_IN_INDEXES                 0x00000080
+#define LDRP_SHIM_DLL                   0x00000100
+#define LDRP_IN_EXCEPTION_TABLE         0x00000200
 #define LDRP_LOAD_IN_PROGRESS           0x00001000
-#define LDRP_UNLOAD_IN_PROGRESS         0x00002000
+#define LDRP_LOAD_CONFIG_PROCESSED      0x00002000
 #define LDRP_ENTRY_PROCESSED            0x00004000
-#define LDRP_ENTRY_INSERTED             0x00008000
-#define LDRP_CURRENT_LOAD               0x00010000
-#define LDRP_FAILED_BUILTIN_LOAD        0x00020000
+#define LDRP_PROTECT_DELAY_LOAD         0x00008000
 #define LDRP_DONT_CALL_FOR_THREADS      0x00040000
 #define LDRP_PROCESS_ATTACH_CALLED      0x00080000
-#define LDRP_DEBUG_SYMBOLS_LOADED       0x00100000
-#define LDRP_IMAGE_NOT_AT_BASE          0x00200000 // Vista and below
+#define LDRP_PROCESS_ATTACH_FAILED      0x00100000
+#define LDRP_COR_DEFERRED_VALIDATE      0x00200000
 #define LDRP_COR_IMAGE                  0x00400000
-#define LDRP_DONT_RELOCATE              0x00800000 // LDR_COR_OWNS_UNMAP
-#define LDRP_SYSTEM_MAPPED              0x01000000
-#define LDRP_IMAGE_VERIFYING            0x02000000
-#define LDRP_DRIVER_DEPENDENT_DLL       0x04000000
-#define LDRP_ENTRY_NATIVE               0x08000000
+#define LDRP_DONT_RELOCATE              0x00800000
+#define LDRP_COR_IL_ONLY                0x01000000
+#define LDRP_CHPE_IMAGE                 0x02000000
+#define LDRP_CHPE_EMULATOR_IMAGE        0x04000000
 #define LDRP_REDIRECTED                 0x10000000
-#define LDRP_NON_PAGED_DEBUG_INFO       0x20000000
-#define LDRP_MM_LOADED                  0x40000000
 #define LDRP_COMPAT_DATABASE_PROCESSED  0x80000000
 
 #define LDR_DATA_TABLE_ENTRY_SIZE_WINXP FIELD_OFFSET(LDR_DATA_TABLE_ENTRY, DdagNode)
@@ -242,9 +244,9 @@ typedef struct _LDR_DATA_TABLE_ENTRY
     ULONG_PTR OriginalBase;
     LARGE_INTEGER LoadTime;
     ULONG BaseNameHashValue;
-    LDR_DLL_LOAD_REASON LoadReason;
+    LDR_DLL_LOAD_REASON LoadReason; // since WIN8
     ULONG ImplicitPathOptions;
-    ULONG ReferenceCount;
+    ULONG ReferenceCount; // since WIN10
     ULONG DependentLoadFlags;
     UCHAR SigningLevel; // since REDSTONE2
     ULONG CheckSum; // since 22H1
@@ -307,7 +309,7 @@ LdrGetDllHandleEx(
     _In_opt_ PWSTR DllPath,
     _In_opt_ PULONG DllCharacteristics,
     _In_ PUNICODE_STRING DllName,
-    _Out_opt_ PVOID* DllHandle
+    _Out_ PVOID* DllHandle
 );
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
@@ -339,6 +341,17 @@ NTAPI
 LdrGetDllFullName(
     _In_ PVOID DllHandle,
     _Out_ PUNICODE_STRING FullDllName
+);
+
+// rev
+NTSYSAPI
+NTSTATUS
+NTAPI
+LdrGetDllPath(
+    _In_  PCWSTR DllName,
+    _In_  ULONG  Flags, // LOAD_LIBRARY_SEARCH_*
+    _Out_ PWSTR* DllPath,
+    _Out_ PWSTR* SearchPaths
 );
 
 // rev
@@ -648,7 +661,7 @@ typedef struct _PS_SYSTEM_DLL_INIT_BLOCK
     ULONG Size;
     ULONG_PTR SystemDllWowRelocation;
     ULONG_PTR SystemDllNativeRelocation;
-    ULONG_PTR Wow64SharedInformation[16];
+    ULONG_PTR Wow64SharedInformation[16]; // use WOW64_SHARED_INFORMATION as index
     ULONG RngData;
     union
     {
@@ -687,7 +700,8 @@ LdrAddLoadAsDataTable(
     _In_ PVOID Module,
     _In_ PWSTR FilePath,
     _In_ SIZE_T Size,
-    _In_ HANDLE Handle
+    _In_ HANDLE Handle,
+    _In_opt_ HANDLE ActCtx
 );
 
 // private
@@ -723,6 +737,65 @@ LdrDisableThreadCalloutsForDll(
 // Resources
 //
 
+#ifdef _KERNEL_MODE
+#include "Veil.System.VersionResource.h"
+#endif
+
+typedef struct _VS_VERSIONINFO_BLOCK
+{
+    UINT16  TotalLength;
+    UINT16  ValueLength;
+    UINT16  Type;                /* 1:Text, 0:Binary */
+    WCHAR   Key[ANYSIZE_ARRAY];
+
+#if 0   /* variable length structure */
+    /* DWORD aligned */
+    BYTE    Value[ANYSIZE_ARRAY];
+    /* DWORD aligned */
+    VS_VERSIONINFO_BLOCK Children[ANYSIZE_ARRAY];
+#endif
+
+}VS_VERSIONINFO_BLOCK, *PVS_VERSIONINFO_BLOCK;
+
+#define __VS_VERSIONINFO_Type(block) \
+    ((const VS_VERSIONINFO_BLOCK*)(block))->Type
+
+#define __VS_VERSIONINFO_Key(block) \
+    ((const VS_VERSIONINFO_BLOCK*)(block))->Key
+
+#define __VS_VERSIONINFO_TotalLength(block) \
+    ((const VS_VERSIONINFO_BLOCK*)(block))->TotalLength
+
+#define __VS_VERSIONINFO_ValueLength(block) \
+    ((const VS_VERSIONINFO_BLOCK*)(block))->ValueLength
+
+#define __VS_VERSIONINFO_ValueBuffer(block) \
+    ((LPBYTE)ROUND_TO_SIZE(__VS_VERSIONINFO_Key(block) + wcslen(__VS_VERSIONINFO_Key(block)) + 1, sizeof UINT32))
+
+#define __VS_VERSIONINFO_ChildrenFirst(block) \
+    (const VS_VERSIONINFO_BLOCK*)(__VS_VERSIONINFO_ValueBuffer(block) + \
+        ROUND_TO_SIZE(__VS_VERSIONINFO_ValueLength(block) * (__VS_VERSIONINFO_Type(block) ? 2 : 1), sizeof UINT32))
+
+#define __VS_VERSIONINFO_ChildrenNext(block) \
+    (const VS_VERSIONINFO_BLOCK*)((LPBYTE)block + ROUND_TO_SIZE(__VS_VERSIONINFO_TotalLength(block), sizeof UINT32))
+
+typedef struct _VS_VERSIONINFO
+{
+    UINT16  TotalLength;
+    UINT16  ValueLength;
+    UINT16  Type;               /* always 0 */
+    WCHAR   Key[ROUND_TO_SIZE(sizeof("VS_VERSION_INFO"), sizeof(UINT32))];
+    VS_FIXEDFILEINFO Value;
+
+}VS_VERSIONINFO, *PVS_VERSIONINFO;
+
+typedef struct _VS_FILEINFO_LANG_CODEPAGE
+{
+    UINT16 Language;
+    UINT16 CodePage;
+
+}VS_FILEINFO_LANG_CODEPAGE, *PVS_FILEINFO_LANG_CODEPAGE;
+
 NTSYSAPI
 NTSTATUS
 NTAPI
@@ -740,10 +813,13 @@ typedef struct _LDR_RESOURCE_INFO
     ULONG_PTR Language;
 } LDR_RESOURCE_INFO, * PLDR_RESOURCE_INFO;
 
-#define RESOURCE_TYPE_LEVEL     0
-#define RESOURCE_NAME_LEVEL     1
-#define RESOURCE_LANGUAGE_LEVEL 2
-#define RESOURCE_DATA_LEVEL     3
+#define LDR_RESOURCE_LEVEL_TYPE     0
+#define LDR_RESOURCE_LEVEL_NAME     1
+#define LDR_RESOURCE_LEVEL_LANGUAGE 2
+#define LDR_RESOURCE_LEVEL_DATA     3
+
+#define LDR_RESOURCE_ID_NAME_MASK   ((~(ULONG_PTR)0) << 16) /* lower 16bits clear */
+#define LDR_RESOURCE_ID_NAME_MINVAL (( (ULONG_PTR)1) << 16) /* 17th bit set */
 
 NTSYSAPI
 NTSTATUS
@@ -817,7 +893,6 @@ LdrFindEntryForAddress(
     _Out_ PLDR_DATA_TABLE_ENTRY* Entry
 );
 
-// rev - Win10 type
 NTSYSAPI
 NTSTATUS
 NTAPI
@@ -828,7 +903,6 @@ LdrLoadAlternateResourceModule(
     _In_ ULONG Flags
 );
 
-// rev - Win10 type
 NTSYSAPI
 NTSTATUS
 NTAPI
@@ -839,7 +913,154 @@ LdrLoadAlternateResourceModuleEx(
     _Out_opt_ ULONG_PTR* ResourceOffset,
     _In_ ULONG Flags
 );
-#endif // _KERNEL_MODE
+
+// ros
+NTSYSAPI
+BOOLEAN
+NTAPI
+LdrUnloadAlternateResourceModule(
+    _In_ PVOID BaseAddress
+);
+
+// rev
+NTSYSAPI
+BOOLEAN
+NTAPI
+LdrUnloadAlternateResourceModuleEx(
+    _In_ PVOID BaseAddress,
+    _In_opt_ ULONG Flags
+);
+
+#endif // if !_KERNEL_MODE
+
+#ifdef _KERNEL_MODE
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+LdrLoadDataFile(
+    _In_  PCUNICODE_STRING FileName,
+    _Out_ PVOID* ModBase,
+    _Out_ SIZE_T* ModSize
+);
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+LdrUnloadDataFile(
+    _In_ PVOID ModBase
+);
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+MmCreateSection(
+    _Deref_out_ PVOID* SectionObject,
+    _In_ ACCESS_MASK DesiredAccess,
+    _In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+    _In_ PLARGE_INTEGER InputMaximumSize,
+    _In_ ULONG SectionPageProtection,
+    _In_ ULONG AllocationAttributes,
+    _In_opt_ HANDLE FileHandle,
+    _In_opt_ PFILE_OBJECT FileObject
+);
+
+inline
+NTSTATUS
+NTAPI
+_VEIL_IMPL_LdrLoadDataFile(
+    _In_  PCUNICODE_STRING FileName,
+    _Out_ PVOID* ModBase,
+    _Out_ SIZE_T* ModSize
+)
+{
+    NTSTATUS Status        = STATUS_SUCCESS;
+    HANDLE   FileHandle    = NULL;
+    PVOID    SectionObject = NULL;
+
+    do
+    {
+        *ModBase = NULL;
+        *ModSize = 0;
+
+        OBJECT_ATTRIBUTES ObjectAttributes = { 0 };
+        InitializeObjectAttributes(
+            &ObjectAttributes,
+            (PUNICODE_STRING)FileName,
+            OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
+            NULL, NULL);
+
+        IO_STATUS_BLOCK IoStatusBlock = { 0 };
+
+        Status = ZwOpenFile(
+            &FileHandle,
+            FILE_GENERIC_READ,
+            &ObjectAttributes,
+            &IoStatusBlock,
+            FILE_SHARE_READ | FILE_SHARE_DELETE,
+            FILE_NON_DIRECTORY_FILE);
+        if (!NT_SUCCESS(Status))
+        {
+            break;
+        }
+
+        LARGE_INTEGER MaximumSize = { 0 };
+
+        Status = MmCreateSection(&SectionObject, SECTION_MAP_READ, NULL,
+            &MaximumSize, PAGE_READONLY, SEC_IMAGE | SEC_NOCACHE, FileHandle, NULL);
+        if (!NT_SUCCESS(Status))
+        {
+            break;
+        }
+
+        Status = MmMapViewInSystemSpace(SectionObject, ModBase, ModSize);
+        if (!NT_SUCCESS(Status))
+        {
+            break;
+        }
+
+    } while (FALSE);
+
+    if (SectionObject)
+    {
+        ObDereferenceObject(SectionObject);
+    }
+    if (FileHandle)
+    {
+        ZwClose(FileHandle);
+    }
+
+    return Status;
+}
+
+inline
+NTSTATUS
+NTAPI
+_VEIL_IMPL_LdrUnloadDataFile(
+    _In_ PVOID ModBase
+)
+{
+    if (ModBase)
+    {
+        return MmUnmapViewInSystemSpace(ModBase);
+    }
+
+    return STATUS_SUCCESS;
+}
+
+#if defined _M_IX86
+
+_VEIL_DEFINE_IAT_RAW_SYMBOL(LdrLoadDataFile@12, _VEIL_IMPL_LdrLoadDataFile);
+_VEIL_DEFINE_IAT_RAW_SYMBOL(LdrUnloadDataFile@4, _VEIL_IMPL_LdrUnloadDataFile);
+
+#elif defined _M_X64 || defined _M_ARM || defined _M_ARM64
+
+_VEIL_DEFINE_IAT_SYMBOL(LdrLoadDataFile, _VEIL_IMPL_LdrLoadDataFile);
+_VEIL_DEFINE_IAT_SYMBOL(LdrUnloadDataFile, _VEIL_IMPL_LdrUnloadDataFile);
+
+#endif
+
+#endif // if _KERNEL_MODE
 
 //
 // Module information
@@ -1013,7 +1234,7 @@ NTAPI
 LdrSetDefaultDllDirectories(
     _In_ ULONG DirectoryFlags
 );
-#endif
+#endif // (NTDDI_VERSION >= NTDDI_WIN8)
 
 // rev
 DECLSPEC_NORETURN

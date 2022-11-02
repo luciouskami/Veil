@@ -88,13 +88,13 @@ typedef enum _OBJECT_INFORMATION_CLASS
     MaxObjectInfoClass
 } OBJECT_INFORMATION_CLASS;
 #else
-#define ObjectBasicInformation          0
-#define ObjectNameInformation           1
-#define ObjectTypeInformation           2
-#define ObjectTypesInformation          3
-#define ObjectHandleFlagInformation     4
-#define ObjectSessionInformation        5
-#define ObjectSessionObjectInformation  6
+#define ObjectBasicInformation          ((_OBJECT_INFORMATION_CLASS)0)
+#define ObjectNameInformation           ((_OBJECT_INFORMATION_CLASS)1)
+#define ObjectTypeInformation           ((_OBJECT_INFORMATION_CLASS)2)
+#define ObjectTypesInformation          ((_OBJECT_INFORMATION_CLASS)3)
+#define ObjectHandleFlagInformation     ((_OBJECT_INFORMATION_CLASS)4)
+#define ObjectSessionInformation        ((_OBJECT_INFORMATION_CLASS)5)
+#define ObjectSessionObjectInformation  ((_OBJECT_INFORMATION_CLASS)6)
 #endif // !_KERNEL_MODE
 
 typedef struct _OBJECT_BASIC_INFORMATION
@@ -415,7 +415,7 @@ ZwClose(
     _In_ HANDLE Handle
 );
 
-#if (NTDDI_VERSION >= NTDDI_WINTHRESHOLD)
+#if (NTDDI_VERSION >= NTDDI_WIN10)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -432,7 +432,7 @@ ZwCompareObjects(
     _In_ HANDLE FirstObjectHandle,
     _In_ HANDLE SecondObjectHandle
 );
-#endif
+#endif // NTDDI_VERSION >= NTDDI_WIN10
 
 //
 // Directory objects
@@ -505,6 +505,7 @@ typedef struct _OBJECT_DIRECTORY_INFORMATION
 {
     UNICODE_STRING Name;
     UNICODE_STRING TypeName;
+
 } OBJECT_DIRECTORY_INFORMATION, * POBJECT_DIRECTORY_INFORMATION;
 
 __kernel_entry NTSYSCALLAPI
@@ -696,6 +697,7 @@ ZwQuerySymbolicLinkObject(
     _Out_opt_ PULONG ReturnedLength
 );
 
+#if (NTDDI_VERSION >= NTDDI_WIN10)
 typedef enum _SYMBOLIC_LINK_INFORMATION_CLASS
 {
     SymbolicLinkGlobalInformation = 1, // s: ULONG
@@ -723,6 +725,7 @@ ZwSetInformationSymbolicLink(
     _In_reads_bytes_(SymbolicLinkInformationLength) PVOID SymbolicLinkInformation,
     _In_ ULONG SymbolicLinkInformationLength
 );
+#endif // (NTDDI_VERSION >= NTDDI_WIN10)
 
 //
 // Only Kernel
@@ -771,7 +774,8 @@ typedef VOID(NTAPI * OB_DUMP_METHOD)(
     _In_opt_ POB_DUMP_CONTROL Control
     );
 
-typedef enum _OB_OPEN_REASON {
+typedef enum _OB_OPEN_REASON
+{
     ObCreateHandle,
     ObOpenHandle,
     ObDuplicateHandle,
@@ -922,10 +926,10 @@ NTKERNELAPI
 NTSTATUS
 NTAPI
 ObCreateObjectType(
-    _In_ PUNICODE_STRING            aTypeName,
-    _In_ POBJECT_TYPE_INITIALIZER   aObjectTypeInitializer,
-    _In_opt_ PSECURITY_DESCRIPTOR   aSecurityDescriptor,
-    _Out_ POBJECT_TYPE* aObjectType
+    _In_ PUNICODE_STRING            TypeName,
+    _In_ POBJECT_TYPE_INITIALIZER   ObjectTypeInitializer,
+    _In_opt_ PSECURITY_DESCRIPTOR   SecurityDescriptor,
+    _Out_ POBJECT_TYPE*             ObjectType
 );
 
 NTKERNELAPI
@@ -940,19 +944,18 @@ ObCreateObject(
     _In_ ULONG           ObjectBodySize,
     _In_ ULONG           PagedPoolCharge,
     _In_ ULONG           NonPagedPoolCharge,
-    _Out_ PVOID* Object
+    _Out_ PVOID*         Object
 );
 
 NTKERNELAPI
 NTSTATUS
-NTAPI
 ObInsertObject(
-    _In_ PVOID              Object,
-    _In_opt_ PACCESS_STATE  PassedAccessState,
-    _In_opt_ ACCESS_MASK    DesiredAccess,
-    _In_ ULONG              ObjectPointerBias,
+    _In_ PVOID Object,
+    _Inout_opt_ PACCESS_STATE PassedAccessState,
+    _In_opt_ ACCESS_MASK DesiredAccess,
+    _In_ ULONG ObjectPointerBias,
     _Out_opt_ PVOID* NewObject,
-    _Out_opt_ PHANDLE       Handle
+    _Out_opt_ PHANDLE Handle
 );
 
 NTKERNELAPI
@@ -970,15 +973,14 @@ ObOpenObjectByName(
 
 NTKERNELAPI
 NTSTATUS
-NTAPI
 ObOpenObjectByPointer(
-    _In_ PVOID              aObject,
-    _In_ ULONG              aHandleAttributes,
-    _Out_opt_ PACCESS_STATE  aPassedAccessState,
-    _In_ ACCESS_MASK        aDesiredAccess,
-    _In_opt_ POBJECT_TYPE   aObjectType,
-    _In_ KPROCESSOR_MODE    aAccessMode,
-    _Out_ PHANDLE           aHandle
+    _In_ PVOID Object,
+    _In_ ULONG HandleAttributes,
+    _In_opt_ PACCESS_STATE PassedAccessState,
+    _In_ ACCESS_MASK DesiredAccess,
+    _In_opt_ POBJECT_TYPE ObjectType,
+    _In_ KPROCESSOR_MODE AccessMode,
+    _Out_ PHANDLE Handle
 );
 
 #if (NTDDI_VERSION >= NTDDI_WIN7)
@@ -998,7 +1000,6 @@ ObOpenObjectByPointerWithTag(
 
 NTKERNELAPI
 VOID
-NTAPI
 ObMakeTemporaryObject(
     _In_ PVOID Object
 );
@@ -1064,7 +1065,7 @@ FORCEINLINE HANDLE ObMakeKernelHandle(HANDLE Handle)
 #define KERNEL_HANDLE_BIT (0xffffffff80000000)
 #endif
 
-    return ((HANDLE)((ULONG_PTR)(Handle) | KERNEL_HANDLE_BIT));
+    return ((HANDLE)(__int3264)((ULONG_PTR)(Handle) | KERNEL_HANDLE_BIT));
 }
 
 #if (NTDDI_VERSION >= NTDDI_VISTA)
@@ -1075,6 +1076,21 @@ ObIsKernelHandle(
 );
 #endif // NTDDI_VERSION >= NTDDI_VISTA
 
+// begin: Object Header
+#include <pshpack8.h>
+
+typedef struct _OBJECT_HEADER_CREATOR_INFO
+{
+    LIST_ENTRY  TypeList;
+    HANDLE      CreatorUniqueProcess;
+    USHORT      CreatorBackTraceIndex;
+    USHORT      Reserved1;
+#ifdef _WIN64
+    ULONG       Reserved2;
+#endif
+} OBJECT_HEADER_CREATOR_INFO, * POBJECT_HEADER_CREATOR_INFO;
+C_ASSERT(sizeof(OBJECT_HEADER_CREATOR_INFO) == (sizeof(void*) == sizeof(__int32) ? 0x0010 : 0x0020));
+
 typedef struct _OBJECT_HEADER_NAME_INFO
 {
     struct _OBJECT_DIRECTORY* Directory;
@@ -1084,6 +1100,163 @@ typedef struct _OBJECT_HEADER_NAME_INFO
     ULONG              Reserved;
 #endif
 } OBJECT_HEADER_NAME_INFO, * POBJECT_HEADER_NAME_INFO;
+C_ASSERT(sizeof(OBJECT_HEADER_NAME_INFO) == (sizeof(void*) == sizeof(__int32) ? 0x0010 : 0x0020));
+
+typedef struct _OBJECT_HANDLE_COUNT_ENTRY
+{
+    PEPROCESS Process;
+    struct
+    {
+        ULONG HandleCount : 24;
+        ULONG LockCount : 8;
+    };
+} OBJECT_HANDLE_COUNT_ENTRY, * POBJECT_HANDLE_COUNT_ENTRY;
+C_ASSERT(sizeof(OBJECT_HANDLE_COUNT_ENTRY) == (sizeof(void*) == sizeof(__int32) ? 0x0008 : 0x0010));
+
+typedef struct _OBJECT_HANDLE_COUNT_DATABASE
+{
+    ULONG CountEntries;
+    OBJECT_HANDLE_COUNT_ENTRY HandleCountEntries[1];
+
+} OBJECT_HANDLE_COUNT_DATABASE, * POBJECT_HANDLE_COUNT_DATABASE;
+C_ASSERT(sizeof(OBJECT_HANDLE_COUNT_DATABASE) == (sizeof(void*) == sizeof(__int32) ? 0x000C : 0x0018));
+
+typedef struct _OBJECT_HEADER_HANDLE_INFO
+{
+    union
+    {
+        POBJECT_HANDLE_COUNT_DATABASE  HandleCountDataBase;
+        OBJECT_HANDLE_COUNT_ENTRY      SingleEntry;
+    };
+} OBJECT_HEADER_HANDLE_INFO, * POBJECT_HEADER_HANDLE_INFO;
+C_ASSERT(sizeof(OBJECT_HEADER_HANDLE_INFO) == (sizeof(void*) == sizeof(__int32) ? 0x0008 : 0x0010));
+
+typedef struct _OBJECT_HEADER_QUOTA_INFO
+{
+    ULONG PagedPoolCharge;
+    ULONG NonPagedPoolCharge;
+    ULONG SecurityDescriptorCharge;
+#ifdef _WIN64
+    ULONG Reserved1;
+    PVOID SecurityDescriptorQuotaBlock;
+    ULONG64 Reserved2;
+#else
+    PVOID SecurityDescriptorQuotaBlock;
+#endif
+} OBJECT_HEADER_QUOTA_INFO, * POBJECT_HEADER_QUOTA_INFO;
+C_ASSERT(sizeof(OBJECT_HEADER_QUOTA_INFO) == (sizeof(void*) == sizeof(__int32) ? 0x0010 : 0x0020));
+
+typedef struct _OBJECT_HEADER_PROCESS_INFO
+{
+    PEPROCESS  ExclusiveProcess;
+    SIZE_T     Reserved;
+
+} OBJECT_HEADER_PROCESS_INFO, * POBJECT_HEADER_PROCESS_INFO;
+C_ASSERT(sizeof(OBJECT_HEADER_PROCESS_INFO) == (sizeof(void*) == sizeof(__int32) ? 0x0008 : 0x0010));
+
+typedef struct _OBJECT_HEADER_AUDIT_INFO
+{
+    PVOID  SecurityDescriptor;
+    SIZE_T Reserved;
+
+} OBJECT_HEADER_AUDIT_INFO, * POBJECT_HEADER_AUDIT_INFO;
+C_ASSERT(sizeof(OBJECT_HEADER_AUDIT_INFO) == (sizeof(void*) == sizeof(__int32) ? 0x0008 : 0x0010));
+
+typedef struct _OBJECT_HEADER_HANDLE_REVOCATION_INFO
+{
+    LIST_ENTRY ListEntry;
+    struct _OB_HANDLE_REVOCATION_BLOCK* RevocationBlock;
+    UINT8 Padding1[4];
+#ifdef _WIN64
+    UINT8 Padding2[4];
+#endif
+} OBJECT_HEADER_HANDLE_REVOCATION_INFO, * POBJECT_HEADER_HANDLE_REVOCATION_INFO;
+C_ASSERT(sizeof(OBJECT_HEADER_HANDLE_REVOCATION_INFO) == (sizeof(void*) == sizeof(__int32) ? 0x0010 : 0x0020));
+
+typedef struct _OBJECT_HEADER_EXTENDED_INFO
+{
+    struct _OBJECT_FOOTER* Footer;
+    SIZE_T Reserved;
+
+} OBJECT_HEADER_EXTENDED_INFO, * POBJECT_HEADER_EXTENDED_INFO;
+C_ASSERT(sizeof(OBJECT_HEADER_EXTENDED_INFO) == (sizeof(void*) == sizeof(__int32) ? 0x0008 : 0x0010));
+
+typedef struct _OBJECT_HEADER_PADDING_INFO
+{
+    ULONG PaddingAmount;
+
+} OBJECT_HEADER_PADDING_INFO, * POBJECT_HEADER_PADDING_INFO;
+C_ASSERT(sizeof(OBJECT_HEADER_PADDING_INFO) == (sizeof(void*) == sizeof(__int32) ? 0x0004 : 0x0004));
+
+typedef struct _OBJECT_CREATE_INFORMATION
+{
+    ULONG   Attributes;
+    HANDLE  RootDirectory;
+    KPROCESSOR_MODE ProbeMode;
+    ULONG   PagedPoolCharge;
+    ULONG   NonPagedPoolCharge;
+    ULONG   SecurityDescriptorCharge;
+    PVOID   SecurityDescriptor;
+    PSECURITY_QUALITY_OF_SERVICE   SecurityQos;
+    SECURITY_QUALITY_OF_SERVICE    SecurityQualityOfService;
+
+} OBJECT_CREATE_INFORMATION, * POBJECT_CREATE_INFORMATION;
+C_ASSERT(sizeof(OBJECT_CREATE_INFORMATION) == (sizeof(void*) == sizeof(__int32) ? 0x002C : 0x0040));
+
+typedef struct _OBJECT_HEADER
+{
+    LONG_PTR PointerCount;
+    union
+    {
+        LONG_PTR HandleCount;
+        PVOID    NextToFree;
+    };
+    EX_PUSH_LOCK Lock;
+    UINT8 TypeIndex;
+    union
+    {
+        UINT8 TraceFlags;
+        struct
+        {
+            UINT8 DbgRefTrace : 1;
+            UINT8 DbgTracePermanent : 1;
+        };
+    };
+    UINT8 InfoMask;
+    union
+    {
+        UINT8 Flags;
+        struct
+        {
+            UINT8 NewObject : 1;
+            UINT8 KernelObject : 1;
+            UINT8 KernelOnlyAccess : 1;
+            UINT8 ExclusiveObject : 1;
+            UINT8 PermanentObject : 1;
+            UINT8 DefaultSecurityQuota : 1;
+            UINT8 SingleHandleEntry : 1;
+            UINT8 DeletedInline : 1;
+        };
+    };
+
+#ifdef _WIN64
+    ULONG Reserved;
+#endif
+
+    union
+    {
+        POBJECT_CREATE_INFORMATION ObjectCreateInfo;
+        PVOID QuotaBlockCharged;
+    };
+
+    PVOID SecurityDescriptor;
+    QUAD Body;
+
+} OBJECT_HEADER, * POBJECT_HEADER;
+C_ASSERT(sizeof(OBJECT_HEADER) == (sizeof(void*) == sizeof(__int32) ? 0x0020 : 0x0038));
+
+#include <poppack.h>
+// end: Object Header
 
 NTKERNELAPI
 POBJECT_HEADER_NAME_INFO
@@ -1112,6 +1285,65 @@ ObDuplicateObject(
     _In_ ULONG Options,
     _In_ KPROCESSOR_MODE PreviousMode
 );
+
+NTKERNELAPI
+NTSTATUS
+NTAPI
+ObSetHandleAttributes(
+    _In_ HANDLE Handle,
+    _In_ POBJECT_HANDLE_FLAG_INFORMATION HandleFlags,
+    _In_ KPROCESSOR_MODE PreviousMode
+);
+
+// begin: ObRegisterCallbacks() cookie struct
+#include <pshpack8.h>
+
+// private
+// 
+// ObRegisterCallbacks() cookie's memory layout
+//
+// +-------------------------------------------+
+// | OB_CALLBACK_OBJECT_HEADER                 |
+// +-------------------------------------------+
+// | OB_CALLBACK_OBJECT_BODY[Header.BodyCount] |
+// +-------------------------------------------+
+// | WCHAR AltitudeBuffer[Altitude.Length]     |
+// +-------------------------------------------+
+//
+
+typedef struct _OB_CALLBACK_OBJECT_BODY
+{
+    // all OB_CALLBACK_BODY
+    // Header -> OBJECT_TYPE.CallbackList
+    LIST_ENTRY                  ListEntry;
+
+    OB_OPERATION                Operations;
+    ULONG                       Always_1;
+
+    // Self
+    struct _OB_CALLBACK_OBJECT_HEADER* CallbackObject;
+
+    POBJECT_TYPE                ObjectType;
+    POB_PRE_OPERATION_CALLBACK  PreOperation;
+    POB_POST_OPERATION_CALLBACK PostOperation;
+
+    ULONG                       Reserved;
+
+}OB_CALLBACK_OBJECT_BODY, *POB_CALLBACK_OBJECT_BODY;
+
+typedef struct _OB_CALLBACK_OBJECT_HEADER
+{
+    USHORT          Version; // ObGetFilterVersion()
+    USHORT          BodyCount;
+    PVOID           RegistrationContext;
+    UNICODE_STRING  Altitude;
+
+    OB_CALLBACK_OBJECT_BODY Body[ANYSIZE_ARRAY];
+
+}OB_CALLBACK_OBJECT_HEADER, *POB_CALLBACK_OBJECT_HEADER;
+
+#include <poppack.h>
+// end: ObRegisterCallbacks() cookie struct
 
 #endif // _KERNEL_MODE
 
