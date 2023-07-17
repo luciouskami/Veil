@@ -206,7 +206,9 @@ ZwSetInformationObject(
     _In_ ULONG ObjectInformationLength
 );
 
-#define DUPLICATE_SAME_ATTRIBUTES 0x00000004
+#define DUPLICATE_CLOSE_SOURCE      0x00000001
+#define DUPLICATE_SAME_ACCESS       0x00000002
+#define DUPLICATE_SAME_ATTRIBUTES   0x00000004
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -312,7 +314,7 @@ NTSTATUS
 NTAPI
 NtWaitForMultipleObjects(
     _In_ ULONG Count,
-    _In_reads_(Count) HANDLE Handles[],
+    _In_reads_(Count) HANDLE* Handles,
     _In_ WAIT_TYPE WaitType,
     _In_ BOOLEAN Alertable,
     _In_opt_ PLARGE_INTEGER Timeout
@@ -324,7 +326,7 @@ NTSTATUS
 NTAPI
 ZwWaitForMultipleObjects(
     _In_ ULONG Count,
-    _In_reads_(Count) HANDLE Handles[],
+    _In_reads_(Count) HANDLE* Handles,
     _In_ WAIT_TYPE WaitType,
     _In_ BOOLEAN Alertable,
     _In_opt_ PLARGE_INTEGER Timeout
@@ -336,7 +338,7 @@ NTSTATUS
 NTAPI
 NtWaitForMultipleObjects32(
     _In_ ULONG Count,
-    _In_reads_(Count) LONG Handles[],
+    _In_reads_(Count) LONG* Handles,
     _In_ WAIT_TYPE WaitType,
     _In_ BOOLEAN Alertable,
     _In_opt_ PLARGE_INTEGER Timeout
@@ -348,7 +350,7 @@ NTSTATUS
 NTAPI
 ZwWaitForMultipleObjects32(
     _In_ ULONG Count,
-    _In_reads_(Count) LONG Handles[],
+    _In_reads_(Count) LONG* Handles,
     _In_ WAIT_TYPE WaitType,
     _In_ BOOLEAN Alertable,
     _In_opt_ PLARGE_INTEGER Timeout

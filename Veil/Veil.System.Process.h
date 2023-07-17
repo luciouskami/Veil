@@ -32,6 +32,7 @@
  */
 
 #pragma once
+#include "Veil.System.SxS.h"
 
 // Warnings which disabled for compiling
 #if _MSC_VER >= 1200
@@ -125,6 +126,21 @@ typedef struct _PEB_LDR_DATA
     HANDLE ShutdownThreadId;
 } PEB_LDR_DATA, * PPEB_LDR_DATA;
 
+typedef struct _PEB_LDR_DATA32
+{
+    ULONG Length;
+    BOOLEAN Initialized;
+    HANDLE32 SsHandle;
+    LIST_ENTRY32 InLoadOrderModuleList;
+    LIST_ENTRY32 InMemoryOrderModuleList;
+    LIST_ENTRY32 InInitializationOrderModuleList;
+    PVOID32 EntryInProgress;
+    BOOLEAN ShutdownInProgress;
+    HANDLE32 ShutdownThreadId;
+} PEB_LDR_DATA32, * POINTER_32 PPEB_LDR_DATA32;
+
+STATIC_ASSERT(sizeof(PEB_LDR_DATA32) == 48);
+
 typedef struct _INITIAL_TEB
 {
     struct
@@ -139,16 +155,6 @@ typedef struct _INITIAL_TEB
 
 typedef struct _RTL_USER_PROCESS_PARAMETERS* PRTL_USER_PROCESS_PARAMETERS;
 typedef struct _RTL_CRITICAL_SECTION* PRTL_CRITICAL_SECTION;
-
-// private
-typedef struct _ACTIVATION_CONTEXT_STACK
-{
-    struct _RTL_ACTIVATION_CONTEXT_STACK_FRAME* ActiveFrame;
-    LIST_ENTRY FrameListCache;
-    ULONG Flags;
-    ULONG NextCookieSequenceNumber;
-    ULONG StackId;
-} ACTIVATION_CONTEXT_STACK, * PACTIVATION_CONTEXT_STACK;
 
 // private
 typedef struct _API_SET_NAMESPACE
@@ -252,7 +258,7 @@ typedef struct _PEB
     ULONG TlsBitmapBits[2];
 
     PVOID ReadOnlySharedMemoryBase;
-    PVOID SharedData; // HotpatchInformation
+    struct _SILO_USER_SHARED_DATA* SharedData; // HotpatchInformation
     PVOID* ReadOnlyStaticServerData;
 
     PVOID AnsiCodePageData; // PCPTABLEINFO
@@ -272,7 +278,7 @@ typedef struct _PEB
     ULONG MaximumNumberOfHeaps;
     PVOID* ProcessHeaps; // PHEAP
 
-    PVOID GdiSharedHandleTable;
+    PVOID GdiSharedHandleTable; // PGDI_SHARED_MEMORY
     PVOID ProcessStarterHelper;
     ULONG GdiDCAttributeList;
 
@@ -302,10 +308,10 @@ typedef struct _PEB
 
     UNICODE_STRING CSDVersion;
 
-    PVOID ActivationContextData; // ACTIVATION_CONTEXT_DATA
-    PVOID ProcessAssemblyStorageMap; // ASSEMBLY_STORAGE_MAP
-    PVOID SystemDefaultActivationContextData; // ACTIVATION_CONTEXT_DATA
-    PVOID SystemAssemblyStorageMap; // ASSEMBLY_STORAGE_MAP
+    PACTIVATION_CONTEXT_DATA ActivationContextData;
+    PASSEMBLY_STORAGE_MAP ProcessAssemblyStorageMap;
+    PACTIVATION_CONTEXT_DATA SystemDefaultActivationContextData;
+    PASSEMBLY_STORAGE_MAP SystemAssemblyStorageMap;
 
     SIZE_T MinimumStackCommit;
 
@@ -381,6 +387,184 @@ C_ASSERT(FIELD_OFFSET(PEB, SessionId) == 0x1D4);
 C_ASSERT(sizeof(PEB) == 0x488); // WIN11
 #endif
 
+typedef struct _PEB32
+{
+    BOOLEAN InheritedAddressSpace;
+    BOOLEAN ReadImageFileExecOptions;
+    BOOLEAN BeingDebugged;
+    union
+    {
+        BOOLEAN BitField;
+        struct
+        {
+            BOOLEAN ImageUsesLargePages : 1;
+            BOOLEAN IsProtectedProcess : 1;
+            BOOLEAN IsImageDynamicallyRelocated : 1;
+            BOOLEAN SkipPatchingUser32Forwarders : 1;
+            BOOLEAN IsPackagedProcess : 1;
+            BOOLEAN IsAppContainer : 1;
+            BOOLEAN IsProtectedProcessLight : 1;
+            BOOLEAN IsLongPathAwareProcess : 1;
+        };
+    };
+
+    HANDLE32 Mutant;
+
+    PVOID32 ImageBaseAddress;
+    PPEB_LDR_DATA32 Ldr;
+    struct _RTL_USER_PROCESS_PARAMETERS32* POINTER_32 ProcessParameters;
+    PVOID32 SubSystemData;
+    PVOID32 ProcessHeap;
+    struct _RTL_CRITICAL_SECTION32* POINTER_32 FastPebLock;
+    union _SLIST_HEADER* POINTER_32 AtlThunkSListPtr;
+    PVOID32 IFEOKey;
+
+    union
+    {
+        ULONG CrossProcessFlags;
+        struct
+        {
+            ULONG ProcessInJob : 1;
+            ULONG ProcessInitializing : 1;
+            ULONG ProcessUsingVEH : 1;
+            ULONG ProcessUsingVCH : 1;
+            ULONG ProcessUsingFTH : 1;
+            ULONG ProcessPreviouslyThrottled : 1;
+            ULONG ProcessCurrentlyThrottled : 1;
+            ULONG ProcessImagesHotPatched : 1; // REDSTONE5
+            ULONG ReservedBits0 : 24;
+        };
+    };
+    union
+    {
+        PVOID32 KernelCallbackTable;
+        PVOID32 UserSharedInfoPtr;
+    };
+    ULONG SystemReserved;
+    ULONG AtlThunkSListPtr32;
+    struct _API_SET_NAMESPACE* POINTER_32 ApiSetMap;
+    ULONG TlsExpansionCounter;
+    PVOID32 TlsBitmap;
+    ULONG TlsBitmapBits[2];
+
+    PVOID32 ReadOnlySharedMemoryBase;
+    struct _SILO_USER_SHARED_DATA* POINTER_32 SharedData; // HotpatchInformation
+    PVOID32* POINTER_32 ReadOnlyStaticServerData;
+
+    PVOID32 AnsiCodePageData; // PCPTABLEINFO
+    PVOID32 OemCodePageData; // PCPTABLEINFO
+    PVOID32 UnicodeCaseTableData; // PNLSTABLEINFO
+
+    ULONG NumberOfProcessors;
+    ULONG NtGlobalFlag;
+
+    ULARGE_INTEGER CriticalSectionTimeout;
+    SIZE_T32 HeapSegmentReserve;
+    SIZE_T32 HeapSegmentCommit;
+    SIZE_T32 HeapDeCommitTotalFreeThreshold;
+    SIZE_T32 HeapDeCommitFreeBlockThreshold;
+
+    ULONG NumberOfHeaps;
+    ULONG MaximumNumberOfHeaps;
+    PVOID32* POINTER_32 ProcessHeaps; // PHEAP
+
+    PVOID32 GdiSharedHandleTable; // PGDI_SHARED_MEMORY
+    PVOID32 ProcessStarterHelper;
+    ULONG GdiDCAttributeList;
+
+    struct _RTL_CRITICAL_SECTION32* POINTER_32 LoaderLock;
+
+    ULONG OSMajorVersion;
+    ULONG OSMinorVersion;
+    USHORT OSBuildNumber;
+    USHORT OSCSDVersion;
+    ULONG OSPlatformId;
+    ULONG ImageSubsystem;
+    ULONG ImageSubsystemMajorVersion;
+    ULONG ImageSubsystemMinorVersion;
+    KAFFINITY32 ActiveProcessAffinityMask;
+    GDI_HANDLE_BUFFER32 GdiHandleBuffer;
+    PVOID32 PostProcessInitRoutine;
+
+    PVOID32 TlsExpansionBitmap;
+    ULONG TlsExpansionBitmapBits[32];
+
+    ULONG SessionId;
+
+    ULARGE_INTEGER AppCompatFlags;
+    ULARGE_INTEGER AppCompatFlagsUser;
+    PVOID32 pShimData;
+    PVOID32 AppCompatInfo; // APPCOMPAT_EXE_DATA
+
+    UNICODE_STRING32 CSDVersion;
+
+    struct _ACTIVATION_CONTEXT_DATA* POINTER_32 ActivationContextData;
+    struct _ASSEMBLY_STORAGE_MAP32* POINTER_32 ProcessAssemblyStorageMap;
+    struct _ACTIVATION_CONTEXT_DATA* POINTER_32 SystemDefaultActivationContextData;
+    struct _ASSEMBLY_STORAGE_MAP32* POINTER_32 SystemAssemblyStorageMap;
+
+    SIZE_T32 MinimumStackCommit;
+
+    PVOID32 SparePointers[2]; // 19H1 (previously FlsCallback to FlsHighIndex)
+    PVOID32 PatchLoaderData;
+    PVOID32 ChpeV2ProcessInfo; // _CHPEV2_PROCESS_INFO
+
+    ULONG AppModelFeatureState;
+    ULONG SpareUlongs[2];
+
+    USHORT ActiveCodePage;
+    USHORT OemCodePage;
+    USHORT UseCaseMapping;
+    USHORT UnusedNlsField;
+
+    PVOID32 WerRegistrationData;
+    PVOID32 WerShipAssertPtr;
+
+    union
+    {
+        PVOID32 pContextData; // WIN7
+        PVOID32 pUnused; // WIN10
+        PVOID32 EcCodeBitMap; // WIN11
+    };
+
+    PVOID32 pImageHeaderHash;
+    union
+    {
+        ULONG TracingFlags;
+        struct
+        {
+            ULONG HeapTracingEnabled : 1;
+            ULONG CritSecTracingEnabled : 1;
+            ULONG LibLoaderTracingEnabled : 1;
+            ULONG SpareTracingBits : 29;
+        };
+    };
+    ULONGLONG CsrServerReadOnlySharedMemoryBase;
+    struct _RTL_CRITICAL_SECTION32* POINTER_32 TppWorkerpListLock;
+    LIST_ENTRY32 TppWorkerpList;
+    PVOID32 WaitOnAddressHashTable[128];
+    PVOID32 TelemetryCoverageHeader; // REDSTONE3
+    ULONG CloudFileFlags;
+    ULONG CloudFileDiagFlags; // REDSTONE4
+    CHAR PlaceholderCompatibilityMode;
+    CHAR PlaceholderCompatibilityModeReserved[7];
+    struct _LEAP_SECOND_DATA* POINTER_32 LeapSecondData; // REDSTONE5
+    union
+    {
+        ULONG LeapSecondFlags;
+        struct
+        {
+            ULONG SixtySecondEnabled : 1;
+            ULONG Reserved : 31;
+        };
+    };
+    ULONG NtGlobalFlag2;
+    ULONGLONG ExtendedFeatureDisableMask; // since WIN11
+
+} PEB32, * POINTER_32 PPEB32;
+
+STATIC_ASSERT(sizeof(PEB32) == 0x488); // WIN11
+
 #define GDI_BATCH_BUFFER_SIZE 310
 
 typedef struct _GDI_TEB_BATCH
@@ -390,11 +574,26 @@ typedef struct _GDI_TEB_BATCH
     ULONG Buffer[GDI_BATCH_BUFFER_SIZE];
 } GDI_TEB_BATCH, * PGDI_TEB_BATCH;
 
+typedef struct _GDI_TEB_BATCH32
+{
+    ULONG Offset;
+    ULONG_PTR32 HDC;
+    ULONG Buffer[GDI_BATCH_BUFFER_SIZE];
+} GDI_TEB_BATCH32, * POINTER_32 PGDI_TEB_BATCH32;
+
+STATIC_ASSERT(sizeof(GDI_TEB_BATCH32) == 1248);
+
 typedef struct _TEB_ACTIVE_FRAME_CONTEXT
 {
     ULONG Flags;
     PSTR FrameName;
 } TEB_ACTIVE_FRAME_CONTEXT, * PTEB_ACTIVE_FRAME_CONTEXT;
+
+typedef struct _TEB_ACTIVE_FRAME_CONTEXT32
+{
+    ULONG Flags;
+    char * POINTER_32 FrameName;
+} TEB_ACTIVE_FRAME_CONTEXT32, * POINTER_32 PTEB_ACTIVE_FRAME_CONTEXT32;
 
 typedef struct _TEB_ACTIVE_FRAME
 {
@@ -402,6 +601,13 @@ typedef struct _TEB_ACTIVE_FRAME
     struct _TEB_ACTIVE_FRAME* Previous;
     PTEB_ACTIVE_FRAME_CONTEXT Context;
 } TEB_ACTIVE_FRAME, * PTEB_ACTIVE_FRAME;
+
+typedef struct _TEB_ACTIVE_FRAME32
+{
+    ULONG Flags;
+    struct _TEB_ACTIVE_FRAME* POINTER_32 Previous;
+    PTEB_ACTIVE_FRAME_CONTEXT32 Context;
+} TEB_ACTIVE_FRAME32, * POINTER_32 PTEB_ACTIVE_FRAME32;
 
 typedef struct _TEB
 {
@@ -512,7 +718,7 @@ typedef struct _TEB
 
     ULONG GuaranteedStackBytes;
     PVOID ReservedForPerf;
-    PVOID ReservedForOle;
+    PVOID ReservedForOle; // tagSOleTlsData
     ULONG WaitingOnLoaderLock;
     PVOID SavedPriorityState;
     ULONG_PTR ReservedForCodeCoverage;
@@ -579,10 +785,414 @@ typedef struct _TEB
     ULONGLONG ExtendedFeatureDisableMask;
 } TEB, * PTEB;
 
+typedef struct _TEB32
+{
+    NT_TIB32 NtTib;
+
+    PVOID32 EnvironmentPointer;
+    CLIENT_ID32 ClientId;
+    PVOID32 ActiveRpcHandle;
+    PVOID32 ThreadLocalStoragePointer;
+    PPEB32 ProcessEnvironmentBlock;
+
+    ULONG LastErrorValue;
+    ULONG CountOfOwnedCriticalSections;
+    PVOID32 CsrClientThread;
+    PVOID32 Win32ThreadInfo;
+    ULONG User32Reserved[26];
+    ULONG UserReserved[5];
+    PVOID32 WOW32Reserved;
+    LCID CurrentLocale;
+    ULONG FpSoftwareStatusRegister;
+    PVOID32 ReservedForDebuggerInstrumentation[16];
+    PVOID32 SystemReserved1[26];
+
+    CHAR PlaceholderCompatibilityMode;
+    BOOLEAN PlaceholderHydrationAlwaysExplicit;
+    CHAR PlaceholderReserved[10];
+
+    ULONG ProxiedProcessId;
+    ACTIVATION_CONTEXT_STACK32 ActivationStack;
+
+    UCHAR WorkingOnBehalfTicket[8];
+    NTSTATUS ExceptionCode;
+
+    PACTIVATION_CONTEXT_STACK32 ActivationContextStackPointer;
+    ULONG_PTR32 InstrumentationCallbackSp;
+    ULONG_PTR32 InstrumentationCallbackPreviousPc;
+    ULONG_PTR32 InstrumentationCallbackPreviousSp;
+
+    BOOLEAN InstrumentationCallbackDisabled;
+    UCHAR SpareBytes[23];
+    ULONG TxFsContext;
+    GDI_TEB_BATCH32 GdiTebBatch;
+    CLIENT_ID32 RealClientId;
+    HANDLE32 GdiCachedProcessHandle;
+    ULONG GdiClientPID;
+    ULONG GdiClientTID;
+    PVOID32 GdiThreadLocalInfo;
+    ULONG_PTR32 Win32ClientInfo[62];
+    PVOID32 glDispatchTable[233];
+    ULONG_PTR32 glReserved1[29];
+    PVOID32 glReserved2;
+    PVOID32 glSectionInfo;
+    PVOID32 glSection;
+    PVOID32 glTable;
+    PVOID32 glCurrentRC;
+    PVOID32 glContext;
+
+    NTSTATUS LastStatusValue;
+    UNICODE_STRING32 StaticUnicodeString;
+    WCHAR StaticUnicodeBuffer[261];
+
+    PVOID32 DeallocationStack;
+    PVOID32 TlsSlots[64];
+    LIST_ENTRY32 TlsLinks;
+
+    PVOID32 Vdm;
+    PVOID32 ReservedForNtRpc;
+    PVOID32 DbgSsReserved[2];
+
+    ULONG HardErrorMode;
+    PVOID32 Instrumentation[9];
+    GUID ActivityId;
+
+    PVOID32 SubProcessTag;
+    PVOID32 PerflibData;
+    PVOID32 EtwTraceData;
+    PVOID32 WinSockData;
+    ULONG GdiBatchCount;
+
+    union
+    {
+        PROCESSOR_NUMBER CurrentIdealProcessor;
+        ULONG IdealProcessorValue;
+        struct
+        {
+            UCHAR ReservedPad0;
+            UCHAR ReservedPad1;
+            UCHAR ReservedPad2;
+            UCHAR IdealProcessor;
+        };
+    };
+
+    ULONG GuaranteedStackBytes;
+    PVOID32 ReservedForPerf;
+    PVOID32 ReservedForOle; // tagSOleTlsData
+    ULONG WaitingOnLoaderLock;
+    PVOID32 SavedPriorityState;
+    ULONG_PTR32 ReservedForCodeCoverage;
+    PVOID32 ThreadPoolData;
+    PVOID32* POINTER_32 TlsExpansionSlots;
+    ULONG MuiGeneration;
+    ULONG IsImpersonating;
+    PVOID32 NlsCache;
+    PVOID32 pShimData;
+    ULONG HeapData;
+    HANDLE32 CurrentTransactionHandle;
+    PTEB_ACTIVE_FRAME32 ActiveFrame;
+    PVOID32 FlsData;
+
+    PVOID32 PreferredLanguages;
+    PVOID32 UserPrefLanguages;
+    PVOID32 MergedPrefLanguages;
+    ULONG MuiImpersonation;
+
+    union
+    {
+        USHORT CrossTebFlags;
+        USHORT SpareCrossTebBits : 16;
+    };
+    union
+    {
+        USHORT SameTebFlags;
+        struct
+        {
+            USHORT SafeThunkCall : 1;
+            USHORT InDebugPrint : 1;
+            USHORT HasFiberData : 1;
+            USHORT SkipThreadAttach : 1;
+            USHORT WerInShipAssertCode : 1;
+            USHORT RanProcessInit : 1;
+            USHORT ClonedThread : 1;
+            USHORT SuppressDebugMsg : 1;
+            USHORT DisableUserStackWalk : 1;
+            USHORT RtlExceptionAttached : 1;
+            USHORT InitialThread : 1;
+            USHORT SessionAware : 1;
+            USHORT LoadOwner : 1;
+            USHORT LoaderWorker : 1;
+            USHORT SkipLoaderInit : 1;
+            USHORT SkipFileAPIBrokering : 1;
+        };
+    };
+
+    PVOID32 TxnScopeEnterCallback;
+    PVOID32 TxnScopeExitCallback;
+    PVOID32 TxnScopeContext;
+    ULONG LockCount;
+    LONG WowTebOffset;
+    PVOID32 ResourceRetValue;
+    PVOID32 ReservedForWdf;
+    ULONGLONG ReservedForCrt;
+    GUID EffectiveContainerId;
+    ULONGLONG LastSleepCounter; // Win11
+    ULONG SpinCallCount;
+    ULONGLONG ExtendedFeatureDisableMask;
+} TEB32, * POINTER_32 PTEB32;
+
+STATIC_ASSERT(sizeof(TEB32) == 4120);
+
 typedef struct _WOW64_PROCESS
 {
     PVOID Wow64;
 } WOW64_PROCESS, * PWOW64_PROCESS;
+
+#if defined(_KERNEL_MODE) && !defined(_WINDOWS_)
+
+//
+// Thread Context
+//
+
+#ifndef _LDT_ENTRY_DEFINED
+#define _LDT_ENTRY_DEFINED
+
+typedef struct _LDT_ENTRY
+{
+    WORD    LimitLow;
+    WORD    BaseLow;
+    union
+    {
+        struct
+        {
+            BYTE    BaseMid;
+            BYTE    Flags1;     // Declare as bytes to avoid alignment
+            BYTE    Flags2;     // Problems.
+            BYTE    BaseHi;
+        } Bytes;
+        struct
+        {
+            DWORD   BaseMid : 8;
+            DWORD   Type : 5;
+            DWORD   Dpl : 2;
+            DWORD   Pres : 1;
+            DWORD   LimitHi : 4;
+            DWORD   Sys : 1;
+            DWORD   Reserved_0 : 1;
+            DWORD   Default_Big : 1;
+            DWORD   Granularity : 1;
+            DWORD   BaseHi : 8;
+        } Bits;
+    } HighWord;
+} LDT_ENTRY, * PLDT_ENTRY;
+
+#endif
+
+//
+// WOW64 Thread Context
+//
+
+#if _MSC_VER >= 1200
+#pragma warning(push)
+#pragma warning(disable:4214) // bitfields other than int
+#pragma warning(disable:4668) // #if not_defined treated as #if 0
+#pragma warning(disable:4820) // padding added after data member
+#endif
+
+#if !defined(RC_INVOKED)
+
+#define WOW64_CONTEXT_i386      0x00010000    // this assumes that i386 and
+#define WOW64_CONTEXT_i486      0x00010000    // i486 have identical context records
+
+#define WOW64_CONTEXT_CONTROL               (WOW64_CONTEXT_i386 | 0x00000001L) // SS:SP, CS:IP, FLAGS, BP
+#define WOW64_CONTEXT_INTEGER               (WOW64_CONTEXT_i386 | 0x00000002L) // AX, BX, CX, DX, SI, DI
+#define WOW64_CONTEXT_SEGMENTS              (WOW64_CONTEXT_i386 | 0x00000004L) // DS, ES, FS, GS
+#define WOW64_CONTEXT_FLOATING_POINT        (WOW64_CONTEXT_i386 | 0x00000008L) // 387 state
+#define WOW64_CONTEXT_DEBUG_REGISTERS       (WOW64_CONTEXT_i386 | 0x00000010L) // DB 0-3,6,7
+#define WOW64_CONTEXT_EXTENDED_REGISTERS    (WOW64_CONTEXT_i386 | 0x00000020L) // cpu specific extensions
+
+#define WOW64_CONTEXT_FULL      (WOW64_CONTEXT_CONTROL | WOW64_CONTEXT_INTEGER | WOW64_CONTEXT_SEGMENTS)
+
+#define WOW64_CONTEXT_ALL       (WOW64_CONTEXT_CONTROL | WOW64_CONTEXT_INTEGER | WOW64_CONTEXT_SEGMENTS | \
+                                 WOW64_CONTEXT_FLOATING_POINT | WOW64_CONTEXT_DEBUG_REGISTERS | \
+                                 WOW64_CONTEXT_EXTENDED_REGISTERS)
+
+#define WOW64_CONTEXT_XSTATE                (WOW64_CONTEXT_i386 | 0x00000040L)
+
+#define WOW64_CONTEXT_EXCEPTION_ACTIVE      0x08000000
+#define WOW64_CONTEXT_SERVICE_ACTIVE        0x10000000
+#define WOW64_CONTEXT_EXCEPTION_REQUEST     0x40000000
+#define WOW64_CONTEXT_EXCEPTION_REPORTING   0x80000000
+
+#endif // !defined(RC_INVOKED)
+
+//
+//  Define the size of the 80387 save area, which is in the context frame.
+//
+
+#define WOW64_SIZE_OF_80387_REGISTERS      80
+
+#define WOW64_MAXIMUM_SUPPORTED_EXTENSION     512
+
+typedef struct _WOW64_FLOATING_SAVE_AREA
+{
+    DWORD   ControlWord;
+    DWORD   StatusWord;
+    DWORD   TagWord;
+    DWORD   ErrorOffset;
+    DWORD   ErrorSelector;
+    DWORD   DataOffset;
+    DWORD   DataSelector;
+    BYTE    RegisterArea[WOW64_SIZE_OF_80387_REGISTERS];
+    DWORD   Cr0NpxState;
+} WOW64_FLOATING_SAVE_AREA;
+
+typedef WOW64_FLOATING_SAVE_AREA* PWOW64_FLOATING_SAVE_AREA;
+
+#include "pshpack4.h"
+
+//
+// Context Frame
+//
+//  This frame has a several purposes: 1) it is used as an argument to
+//  NtContinue, 2) is is used to constuct a call frame for APC delivery,
+//  and 3) it is used in the user level thread creation routines.
+//
+//  The layout of the record conforms to a standard call frame.
+//
+
+typedef struct _WOW64_CONTEXT
+{
+
+    //
+    // The flags values within this flag control the contents of
+    // a CONTEXT record.
+    //
+    // If the context record is used as an input parameter, then
+    // for each portion of the context record controlled by a flag
+    // whose value is set, it is assumed that that portion of the
+    // context record contains valid context. If the context record
+    // is being used to modify a threads context, then only that
+    // portion of the threads context will be modified.
+    //
+    // If the context record is used as an IN OUT parameter to capture
+    // the context of a thread, then only those portions of the thread's
+    // context corresponding to set flags will be returned.
+    //
+    // The context record is never used as an OUT only parameter.
+    //
+
+    DWORD ContextFlags;
+
+    //
+    // This section is specified/returned if CONTEXT_DEBUG_REGISTERS is
+    // set in ContextFlags.  Note that CONTEXT_DEBUG_REGISTERS is NOT
+    // included in CONTEXT_FULL.
+    //
+
+    DWORD   Dr0;
+    DWORD   Dr1;
+    DWORD   Dr2;
+    DWORD   Dr3;
+    DWORD   Dr6;
+    DWORD   Dr7;
+
+    //
+    // This section is specified/returned if the
+    // ContextFlags word contians the flag CONTEXT_FLOATING_POINT.
+    //
+
+    WOW64_FLOATING_SAVE_AREA FloatSave;
+
+    //
+    // This section is specified/returned if the
+    // ContextFlags word contians the flag CONTEXT_SEGMENTS.
+    //
+
+    DWORD   SegGs;
+    DWORD   SegFs;
+    DWORD   SegEs;
+    DWORD   SegDs;
+
+    //
+    // This section is specified/returned if the
+    // ContextFlags word contians the flag CONTEXT_INTEGER.
+    //
+
+    DWORD   Edi;
+    DWORD   Esi;
+    DWORD   Ebx;
+    DWORD   Edx;
+    DWORD   Ecx;
+    DWORD   Eax;
+
+    //
+    // This section is specified/returned if the
+    // ContextFlags word contians the flag CONTEXT_CONTROL.
+    //
+
+    DWORD   Ebp;
+    DWORD   Eip;
+    DWORD   SegCs;              // MUST BE SANITIZED
+    DWORD   EFlags;             // MUST BE SANITIZED
+    DWORD   Esp;
+    DWORD   SegSs;
+
+    //
+    // This section is specified/returned if the ContextFlags word
+    // contains the flag CONTEXT_EXTENDED_REGISTERS.
+    // The format and contexts are processor specific
+    //
+
+    BYTE    ExtendedRegisters[WOW64_MAXIMUM_SUPPORTED_EXTENSION];
+
+} WOW64_CONTEXT;
+
+typedef WOW64_CONTEXT* PWOW64_CONTEXT;
+
+#include "poppack.h"
+
+
+typedef struct _WOW64_LDT_ENTRY
+{
+    WORD    LimitLow;
+    WORD    BaseLow;
+    union
+    {
+        struct
+        {
+            BYTE    BaseMid;
+            BYTE    Flags1;     // Declare as bytes to avoid alignment
+            BYTE    Flags2;     // Problems.
+            BYTE    BaseHi;
+        } Bytes;
+        struct
+        {
+            DWORD   BaseMid : 8;
+            DWORD   Type : 5;
+            DWORD   Dpl : 2;
+            DWORD   Pres : 1;
+            DWORD   LimitHi : 4;
+            DWORD   Sys : 1;
+            DWORD   Reserved_0 : 1;
+            DWORD   Default_Big : 1;
+            DWORD   Granularity : 1;
+            DWORD   BaseHi : 8;
+        } Bits;
+    } HighWord;
+} WOW64_LDT_ENTRY, * PWOW64_LDT_ENTRY;
+
+typedef struct _WOW64_DESCRIPTOR_TABLE_ENTRY
+{
+    DWORD Selector;
+    WOW64_LDT_ENTRY Descriptor;
+} WOW64_DESCRIPTOR_TABLE_ENTRY, * PWOW64_DESCRIPTOR_TABLE_ENTRY;
+
+#if _MSC_VER >= 1200
+#pragma warning(pop)
+#endif
+
+#endif // defined(_KERNEL_MODE) && !defined(_WINDOWS_)
 
 #ifndef _KERNEL_MODE
 //
@@ -639,7 +1249,7 @@ typedef enum _PROCESSINFOCLASS
     ProcessMemoryAllocationMode, // qs: PROCESS_MEMORY_ALLOCATION_MODE
     ProcessGroupInformation, // q: USHORT[]
     ProcessTokenVirtualizationEnabled, // s: ULONG
-    ProcessConsoleHostProcess, // q: ULONG_PTR // ProcessOwnerInformation
+    ProcessConsoleHostProcess, // qs: ULONG_PTR // ProcessOwnerInformation
     ProcessWindowInformation, // q: PROCESS_WINDOW_INFORMATION // 50
     ProcessHandleInformation, // q: PROCESS_HANDLE_SNAPSHOT_INFORMATION // since WIN8
     ProcessMitigationPolicy, // s: PROCESS_MITIGATION_POLICY_INFORMATION
@@ -647,7 +1257,7 @@ typedef enum _PROCESSINFOCLASS
     ProcessHandleCheckingMode, // qs: ULONG; s: 0 disables, otherwise enables
     ProcessKeepAliveCount, // q: PROCESS_KEEPALIVE_COUNT_INFORMATION
     ProcessRevokeFileHandles, // s: PROCESS_REVOKE_FILE_HANDLES_INFORMATION
-    ProcessWorkingSetControl, // s: PROCESS_WORKING_SET_CONTROL
+    ProcessWorkingSetControl, // s: PROCESS_WORKING_SET_CONTROL (requires SeDebugPrivilege)
     ProcessHandleTable, // q: ULONG[] // since WINBLUE
     ProcessCheckStackExtentsMode, // qs: ULONG // KPROCESS->CheckStackExtents (CFG)
     ProcessCommandLineInformation, // q: UNICODE_STRING // 60
@@ -672,7 +1282,7 @@ typedef enum _PROCESSINFOCLASS
     ProcessWin32kSyscallFilterInformation, // q: WIN32K_SYSCALL_FILTER
     ProcessDisableSystemAllowedCpuSets, // 80
     ProcessWakeInformation, // PROCESS_WAKE_INFORMATION
-    ProcessEnergyTrackingState, // PROCESS_ENERGY_TRACKING_STATE
+    ProcessEnergyTrackingState, // qs: PROCESS_ENERGY_TRACKING_STATE
     ProcessManageWritesToExecutableMemory, // MANAGE_WRITES_TO_EXECUTABLE_MEMORY // since REDSTONE3
     ProcessCaptureTrustletLiveDump,
     ProcessTelemetryCoverage,
@@ -690,16 +1300,16 @@ typedef enum _PROCESSINFOCLASS
     ProcessLeapSecondInformation, // PROCESS_LEAP_SECOND_INFORMATION
     ProcessFiberShadowStackAllocation, // PROCESS_FIBER_SHADOW_STACK_ALLOCATION_INFORMATION // since 19H1
     ProcessFreeFiberShadowStackAllocation, // PROCESS_FREE_FIBER_SHADOW_STACK_ALLOCATION_INFORMATION
-    ProcessAltSystemCallInformation, // qs: BOOLEAN (kernel-mode only) // INT2E // since 20H1 // 100
+    ProcessAltSystemCallInformation, // since 20H1 // 100
     ProcessDynamicEHContinuationTargets, // PROCESS_DYNAMIC_EH_CONTINUATION_TARGETS_INFORMATION
     ProcessDynamicEnforcedCetCompatibleRanges, // PROCESS_DYNAMIC_ENFORCED_ADDRESS_RANGE_INFORMATION // since 20H2
     ProcessCreateStateChange, // since WIN11
     ProcessApplyStateChange,
-    ProcessEnableOptionalXStateFeatures,
+    ProcessEnableOptionalXStateFeatures, // ULONG64 // optional XState feature bitmask
     ProcessAltPrefetchParam, // since 22H1
     ProcessAssignCpuPartitions,
     ProcessPriorityClassEx, // s: PROCESS_PRIORITY_CLASS_EX
-    ProcessMembershipInformation,
+    ProcessMembershipInformation, // PROCESS_MEMBERSHIP_INFORMATION
     ProcessEffectiveIoPriority, // q: IO_PRIORITY_HINT
     ProcessEffectivePagePriority, // q: ULONG
     MaxProcessInfoClass
@@ -740,7 +1350,7 @@ typedef enum _THREADINFOCLASS
     ThreadTebInformation, // q: THREAD_TEB_INFORMATION (requires THREAD_GET_CONTEXT + THREAD_SET_CONTEXT)
     ThreadCSwitchMon,
     ThreadCSwitchPmu,
-    ThreadWow64Context, // qs: WOW64_CONTEXT
+    ThreadWow64Context, // qs: WOW64_CONTEX, ARM_NT_CONTEXT since 20H1
     ThreadGroupInformation, // qs: GROUP_AFFINITY // 30
     ThreadUmsInformation, // q: THREAD_UMS_INFORMATION
     ThreadCounterProfiling, // q: BOOLEAN; s: THREAD_PROFILING_INFORMATION?
@@ -890,40 +1500,6 @@ typedef struct _PROCESS_ACCESS_TOKEN
     HANDLE Thread; // handle to initial/only thread; needs THREAD_QUERY_INFORMATION access
 } PROCESS_ACCESS_TOKEN, * PPROCESS_ACCESS_TOKEN;
 #endif // !_KERNEL_MODE
-
-#ifndef _LDT_ENTRY_DEFINED
-#define _LDT_ENTRY_DEFINED
-typedef struct _LDT_ENTRY
-{
-    USHORT    LimitLow;
-    USHORT    BaseLow;
-    union
-    {
-        struct
-        {
-            UINT8    BaseMid;
-            UINT8    Flags1;     // Declare as bytes to avoid alignment
-            UINT8    Flags2;     // Problems.
-            UINT8    BaseHi;
-        } Bytes;
-
-        struct
-        {
-            UINT32   BaseMid : 8;
-            UINT32   Type : 5;
-            UINT32   Dpl : 2;
-            UINT32   Pres : 1;
-            UINT32   LimitHi : 4;
-            UINT32   Sys : 1;
-            UINT32   Reserved_0 : 1;
-            UINT32   Default_Big : 1;
-            UINT32   Granularity : 1;
-            UINT32   BaseHi : 8;
-        } Bits;
-
-    } HighWord;
-} LDT_ENTRY, * PLDT_ENTRY;
-#endif
 
 typedef struct _PROCESS_LDT_INFORMATION
 {
@@ -1224,6 +1800,10 @@ typedef struct _PROCESS_MITIGATION_POLICY_INFORMATION
         PROCESS_MITIGATION_REDIRECTION_TRUST_POLICY RedirectionTrustPolicy;
 #endif // NTDDI_VERSION >= NTDDI_WIN10_MN
 
+#if (NTDDI_VERSION >= NTDDI_WIN11_NI)
+        PROCESS_MITIGATION_USER_POINTER_AUTH_POLICY UserPointerAuthPolicy;
+        PROCESS_MITIGATION_SEHOP_POLICY SEHOPPolicy;
+#endif // NTDDI_VERSION >= NTDDI_WIN10_MN
     };
 } PROCESS_MITIGATION_POLICY_INFORMATION, * PPROCESS_MITIGATION_POLICY_INFORMATION;
 
@@ -1556,7 +2136,30 @@ typedef struct _PROCESS_FREE_FIBER_SHADOW_STACK_ALLOCATION_INFORMATION
 //    PPROCESS_DYNAMIC_ENFORCED_ADDRESS_RANGE Ranges;
 //} PROCESS_DYNAMIC_ENFORCED_ADDRESS_RANGES_INFORMATION, *PPROCESS_DYNAMIC_ENFORCED_ADDRESS_RANGES_INFORMATION;
 
+#ifndef _KERNEL_MODE
+// private
+typedef struct _PROCESS_MEMBERSHIP_INFORMATION
+{
+    ULONG ServerSiloId;
+} PROCESS_MEMBERSHIP_INFORMATION, * PPROCESS_MEMBERSHIP_INFORMATION;
+#endif
+
 // end_private
+
+__kernel_entry NTSYSCALLAPI
+NTSTATUS
+NTAPI
+NtQueryPortInformationProcess(
+    VOID
+);
+
+_IRQL_requires_max_(PASSIVE_LEVEL)
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwQueryPortInformationProcess(
+    VOID
+);
 
 //
 // Thread information structures
@@ -1569,7 +2172,7 @@ typedef struct _THREAD_BASIC_INFORMATION
     CLIENT_ID ClientId;
     KAFFINITY AffinityMask;
     KPRIORITY Priority;
-    KAFFINITY BasePriority;
+    KPRIORITY BasePriority;
 } THREAD_BASIC_INFORMATION, * PTHREAD_BASIC_INFORMATION;
 
 // private
@@ -1893,17 +2496,25 @@ ZwResumeProcess(
 );
 
 #ifndef _KERNEL_MODE
-#define NtCurrentProcess()  ((HANDLE)(LONG_PTR)-1)
-#define ZwCurrentProcess()  NtCurrentProcess()
+#define NtCurrentProcess()      ((HANDLE)(LONG_PTR)-1)
+#define ZwCurrentProcess()      NtCurrentProcess()
 
-#define NtCurrentThread()   ((HANDLE)(LONG_PTR)-2)
-#define ZwCurrentThread()   NtCurrentThread()
+#define NtCurrentThread()       ((HANDLE)(LONG_PTR)-2)
+#define ZwCurrentThread()       NtCurrentThread()
 
-#define NtCurrentSession()  ((HANDLE)(LONG_PTR)-3)
-#define ZwCurrentSession()  NtCurrentSession()
+#define NtCurrentSession()      ((HANDLE)(LONG_PTR)-3)
+#define ZwCurrentSession()      NtCurrentSession()
+
+#define NtCurrentPeb()          (NtCurrentTeb()->ProcessEnvironmentBlock)
+#define ZwCurrentPeb()          NtCurrentPeb()
+
+// Not NT, but useful.
+#define NtCurrentProcessId()    (NtCurrentTeb()->ClientId.UniqueProcess)
+#define ZwCurrentProcessId()    NtCurrentProcessId()
+#define NtCurrentThreadId()     (NtCurrentTeb()->ClientId.UniqueThread)
+#define ZwCurrentThreadId()     NtCurrentThreadId()
+
 #endif // !_KERNEL_MODE
-
-#define NtCurrentPeb()      (NtCurrentTeb()->ProcessEnvironmentBlock)
 
 // Windows 8 and above
 #define NtCurrentProcessToken()         ((HANDLE)(LONG_PTR)-4) // NtOpenProcessToken(NtCurrentProcess())
@@ -1911,10 +2522,6 @@ ZwResumeProcess(
 #define NtCurrentThreadEffectiveToken() ((HANDLE)(LONG_PTR)-6) // NtOpenThreadToken(NtCurrentThread()) + NtOpenProcessToken(NtCurrentProcess())
 
 #define NtCurrentSilo() ( (HANDLE)(LONG_PTR) -1 )
-
-// Not NT, but useful.
-#define NtCurrentProcessId()            (NtCurrentTeb()->ClientId.UniqueProcess)
-#define NtCurrentThreadId()             (NtCurrentTeb()->ClientId.UniqueThread)
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -1984,7 +2591,7 @@ NTSTATUS
 NTAPI
 ZwGetNextThread(
     _In_ HANDLE ProcessHandle,
-    _In_ HANDLE ThreadHandle,
+    _In_opt_ HANDLE ThreadHandle,
     _In_ ACCESS_MASK DesiredAccess,
     _In_ ULONG HandleAttributes,
     _In_ ULONG Flags,
@@ -2607,10 +3214,17 @@ ZwQueueApcThreadEx(
 
 #if (NTDDI_VERSION >= NTDDI_WIN10_CO)
 
-#ifdef _KERNEL_MODE
-typedef enum _QUEUE_USER_APC_FLAGS {
-    QUEUE_USER_APC_FLAGS_NONE = 0x0,
-    QUEUE_USER_APC_FLAGS_SPECIAL_USER_APC = 0x1,
+#if defined(_KERNEL_MODE) && !defined(_WINDOWS_)
+typedef enum _QUEUE_USER_APC_FLAGS
+{
+    QUEUE_USER_APC_FLAGS_NONE = 0x00000000,
+    QUEUE_USER_APC_FLAGS_SPECIAL_USER_APC = 0x00000001,
+
+    //
+    // Used for requesting additional callback data.
+    //
+
+    QUEUE_USER_APC_CALLBACK_DATA_CONTEXT = 0x00010000,
 } QUEUE_USER_APC_FLAGS;
 #endif // !_KERNEL_MODE
 
@@ -2694,7 +3308,7 @@ ZwWaitForAlertByThreadId(
 #define PS_ATTRIBUTE_INPUT          0x00020000 // input only
 #define PS_ATTRIBUTE_ADDITIVE       0x00040000 // "accumulated" e.g. bitmasks, counters, etc.
 
-#ifdef _KERNEL_MODE
+#if defined(_KERNEL_MODE) && !defined(_WINDOWS_)
 typedef enum _PROC_THREAD_ATTRIBUTE_NUM {
     ProcThreadAttributeParentProcess                = 0,
     ProcThreadAttributeExtendedFlags                = 1,
@@ -3317,13 +3931,13 @@ ZwCreateUserProcess(
 #endif
 
 // begin_rev
+#define THREAD_CREATE_FLAGS_NONE                    0x00000000
 #define THREAD_CREATE_FLAGS_CREATE_SUSPENDED        0x00000001 // NtCreateUserProcess & NtCreateThreadEx
 #define THREAD_CREATE_FLAGS_SKIP_THREAD_ATTACH      0x00000002 // NtCreateThreadEx only
 #define THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER      0x00000004 // NtCreateThreadEx only
 #define THREAD_CREATE_FLAGS_LOADER_WORKER           0x00000010 // NtCreateThreadEx only
 #define THREAD_CREATE_FLAGS_SKIP_LOADER_INIT        0x00000020 // NtCreateThreadEx only
 #define THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE   0x00000040 // NtCreateThreadEx only
-#define THREAD_CREATE_FLAGS_INITIAL_THREAD          0x00000080 // ?
 // end_rev
 
 #if (NTDDI_VERSION >= NTDDI_VISTA)
@@ -3366,7 +3980,7 @@ ZwCreateThreadEx(
 //
 // Job objects
 //
-#ifdef _KERNEL_MODE
+#if defined(_KERNEL_MODE) && !defined(_WINDOWS_)
 typedef enum _JOBOBJECTINFOCLASS
 {
     JobObjectBasicAccountingInformation, // JOBOBJECT_BASIC_ACCOUNTING_INFORMATION
@@ -3570,15 +4184,20 @@ typedef struct _JOBOBJECT_MEMORY_USAGE_INFORMATION_V2
 //
 typedef struct _SILO_USER_SHARED_DATA
 {
-    ULONG64 ServiceSessionId;
+    ULONG ServiceSessionId;
     ULONG ActiveConsoleId;
     LONGLONG ConsoleSessionForegroundProcessId;
     NT_PRODUCT_TYPE NtProductType;
     ULONG SuiteMask;
-    ULONG SharedUserSessionId;
+    ULONG SharedUserSessionId; // since RS2
     BOOLEAN IsMultiSessionSku;
     WCHAR NtSystemRoot[260];
     USHORT UserModeGlobalLogger[16];
+    ULONG TimeZoneId; // since 21H2
+    LONG TimeZoneBiasStamp;
+    KSYSTEM_TIME TimeZoneBias;
+    LARGE_INTEGER TimeZoneBiasEffectiveStart;
+    LARGE_INTEGER TimeZoneBiasEffectiveEnd;
 } SILO_USER_SHARED_DATA, * PSILO_USER_SHARED_DATA;
 #endif // WDK_NTDDI_VERSION != NTDDI_WIN10_RS1
 
@@ -3732,7 +4351,7 @@ ZwSetInformationJobObject(
     _In_ ULONG JobObjectInformationLength
 );
 
-#ifdef _KERNEL_MODE
+#if defined(_KERNEL_MODE) && !defined(_WINDOWS_)
 typedef struct _JOB_SET_ARRAY
 {
     HANDLE JobHandle;   // Handle to job object to insert
@@ -3789,7 +4408,6 @@ typedef enum _MEMORY_RESERVE_TYPE
     MemoryReserveTypeMax
 } MEMORY_RESERVE_TYPE;
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -3808,7 +4426,6 @@ ZwAllocateReserveObject(
     _In_ POBJECT_ATTRIBUTES ObjectAttributes,
     _In_ MEMORY_RESERVE_TYPE Type
 );
-#endif
 
 // Process snapshotting
 
@@ -3826,6 +4443,43 @@ PssNtCaptureSnapshot(
 );
 #endif
 #endif // !_KERNEL_MODE
+
+#if (NTDDI_VERSION >= NTDDI_WIN10_VB)
+// rev
+#define MEMORY_BULK_INFORMATION_FLAG_BASIC 0x00000001
+
+// rev
+typedef struct _NTPSS_MEMORY_BULK_INFORMATION
+{
+    ULONG QueryFlags;
+    ULONG NumberOfEntries;
+    PVOID NextValidAddress;
+} NTPSS_MEMORY_BULK_INFORMATION, * PNTPSS_MEMORY_BULK_INFORMATION;
+
+// rev
+__kernel_entry NTSYSCALLAPI
+NTSTATUS
+NTAPI
+NtPssCaptureVaSpaceBulk(
+    _In_ HANDLE ProcessHandle,
+    _In_opt_ PVOID BaseAddress,
+    _In_ PNTPSS_MEMORY_BULK_INFORMATION BulkInformation,
+    _In_ SIZE_T BulkInformationLength,
+    _Out_opt_ PSIZE_T ReturnLength
+);
+
+_IRQL_requires_max_(PASSIVE_LEVEL)
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwPssCaptureVaSpaceBulk(
+    _In_ HANDLE ProcessHandle,
+    _In_opt_ PVOID BaseAddress,
+    _In_ PNTPSS_MEMORY_BULK_INFORMATION BulkInformation,
+    _In_ SIZE_T BulkInformationLength,
+    _Out_opt_ PSIZE_T ReturnLength
+);
+#endif // NTDDI_VERSION >= NTDDI_WIN10_VB
 
 #ifdef _KERNEL_MODE
 
@@ -3983,7 +4637,7 @@ FORCEINLINE BOOLEAN NTAPI PsIs32bitProcess(
     return !!PsGetProcessWow64Process(Process);
 #else
     UNREFERENCED_PARAMETER(Process);
-    return FALSE;
+    return TRUE;
 #endif
 }
 

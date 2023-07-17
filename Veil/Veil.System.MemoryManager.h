@@ -126,15 +126,15 @@ VEIL_BEGIN()
 #ifndef _KERNEL_MODE
 typedef enum _MEMORY_INFORMATION_CLASS
 {
-    MemoryBasicInformation,                 // MEMORY_BASIC_INFORMATION
-    MemoryWorkingSetInformation,            // MEMORY_WORKING_SET_INFORMATION
-    MemoryMappedFileNameInformation,        // UNICODE_STRING
-    MemoryRegionInformation,                // MEMORY_REGION_INFORMATION
-    MemoryWorkingSetExInformation,          // MEMORY_WORKING_SET_EX_INFORMATION // since VISTA
-    MemorySharedCommitInformation,          // MEMORY_SHARED_COMMIT_INFORMATION // since WIN8
-    MemoryImageInformation,                 // MEMORY_IMAGE_INFORMATION
+    MemoryBasicInformation,                 // q: MEMORY_BASIC_INFORMATION
+    MemoryWorkingSetInformation,            // q: MEMORY_WORKING_SET_INFORMATION
+    MemoryMappedFilenameInformation,        // q: UNICODE_STRING
+    MemoryRegionInformation,                // q: MEMORY_REGION_INFORMATION
+    MemoryWorkingSetExInformation,          // q: MEMORY_WORKING_SET_EX_INFORMATION // since VISTA
+    MemorySharedCommitInformation,          // q: MEMORY_SHARED_COMMIT_INFORMATION // since WIN8
+    MemoryImageInformation,                 // q: MEMORY_IMAGE_INFORMATION
     MemoryRegionInformationEx,              // MEMORY_REGION_INFORMATION
-    MemoryPrivilegedBasicInformation,
+    MemoryPrivilegedBasicInformation,       // MEMORY_BASIC_INFORMATION
     MemoryEnclaveImageInformation,          // MEMORY_ENCLAVE_IMAGE_INFORMATION // since REDSTONE3
     MemoryBasicInformationCapped,           // 10
     MemoryPhysicalContiguityInformation,    // MEMORY_PHYSICAL_CONTIGUITY_INFORMATION // since 20H1
@@ -652,8 +652,6 @@ typedef enum _MEM_DEDICATED_ATTRIBUTE_TYPE {
     MemDedicatedAttributeMax
 } MEM_DEDICATED_ATTRIBUTE_TYPE, * PMEM_DEDICATED_ATTRIBUTE_TYPE;
 
-
-
 typedef struct _MEMORY_PARTITION_DEDICATED_MEMORY_OPEN_INFORMATION {
 
     //
@@ -677,16 +675,6 @@ typedef struct _MEMORY_PARTITION_DEDICATED_MEMORY_OPEN_INFORMATION {
     HANDLE DedicatedMemoryPartitionHandle;
 
 } MEMORY_PARTITION_DEDICATED_MEMORY_OPEN_INFORMATION, * PMEMORY_PARTITION_DEDICATED_MEMORY_OPEN_INFORMATION;
-
-#define SEC_HUGE_PAGES              0x00020000  
-#define SEC_64K_PAGES               0x00080000  
-#define SEC_FILE                    0x00800000  
-#define SEC_IMAGE                   0x01000000  
-#define SEC_RESERVE                 0x04000000  
-#define SEC_COMMIT                  0x08000000  
-#define SEC_NOCACHE                 0x10000000  
-#define SEC_LARGE_PAGES             0x80000000  
-#define SEC_IMAGE_NO_EXECUTE (SEC_IMAGE | SEC_NOCACHE)  
 
 typedef enum MEM_SECTION_EXTENDED_PARAMETER_TYPE {
     MemSectionExtendedParameterInvalidType = 0,
@@ -934,7 +922,7 @@ typedef struct _MEMORY_RANGE_ENTRY
 
 #if (NTDDI_VERSION >= NTDDI_WIN10_RS2)
 
-#ifdef _KERNEL_MODE
+#if defined(_KERNEL_MODE) && !defined(_WINDOWS_)
 
 //
 // Define flags for setting process CFG valid call target entries.
@@ -1209,7 +1197,7 @@ NtMapViewOfSectionEx(
     _Inout_ PSIZE_T ViewSize,
     _In_ ULONG AllocationType,
     _In_ ULONG Win32Protect,
-    _Inout_updates_opt_(ParameterCount) PMEM_EXTENDED_PARAMETER ExtendedParameters,
+    _Inout_updates_opt_(ExtendedParameterCount) PMEM_EXTENDED_PARAMETER ExtendedParameters,
     _In_ ULONG ExtendedParameterCount
 );
 
@@ -1227,7 +1215,7 @@ ZwMapViewOfSectionEx(
     _Inout_ PSIZE_T ViewSize,
     _In_ ULONG AllocationType,
     _In_ ULONG Win32Protect,
-    _Inout_updates_opt_(ParameterCount) PMEM_EXTENDED_PARAMETER ExtendedParameters,
+    _Inout_updates_opt_(ExtendedParameterCount) PMEM_EXTENDED_PARAMETER ExtendedParameters,
     _In_ ULONG ExtendedParameterCount
 );
 #endif // NTDDI_VERSION >= NTDDI_WIN10_RS4

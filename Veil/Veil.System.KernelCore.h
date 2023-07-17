@@ -51,16 +51,17 @@ VEIL_BEGIN()
 // System service table descriptor.
 //
 
-#define NUMBER_SERVICE_TABLES       4
+#define NUMBER_SERVICE_TABLES       2
 #define SERVICE_TABLE_MASK          0x0FFF
 #define SERVICE_TABLE_WIN32K_TEST   (~SERVICE_TABLE_MASK)
 
-typedef struct _KSERVICE_TABLE_DESCRIPTOR {
-    INT32* ServiceTable;        // nt!KiServiceTable  (ServiceTable[SystemCallNumber])
+typedef struct _KKSYSTEM_SERVICE_TABLE
+{
+    INT32* ServiceTable;        // nt!KiServiceTable /win32k!W32pServiceTable  (ServiceTable[SystemCallNumber])
     ULONG* ServiceCallCount;    // unused
     ULONG  NumberOfServices;    // nt!KiServiceLimit
-    BYTE * ArgumentTable;       // nt!KiArgumentTable (ArgumentTable[SystemCallNumber])
-} KSERVICE_TABLE_DESCRIPTOR, * PKSERVICE_TABLE_DESCRIPTOR;
+    BYTE * ArgumentTable;       // nt!KiArgumentTable/win32k!W32pArgumentTable (ArgumentTable[SystemCallNumber])
+} KSYSTEM_SERVICE_TABLE, * PKSYSTEM_SERVICE_TABLE;
 
 //
 // Thread State
@@ -212,7 +213,7 @@ ZwCallbackReturn(
 
 #if (NTDDI_VERSION >= NTDDI_VISTA)
 __kernel_entry NTSYSCALLAPI
-VOID
+NTSTATUS
 NTAPI
 NtFlushProcessWriteBuffers(
     VOID
@@ -220,7 +221,7 @@ NtFlushProcessWriteBuffers(
 
 _IRQL_requires_max_(PASSIVE_LEVEL)
 NTSYSAPI
-VOID
+NTSTATUS
 NTAPI
 ZwFlushProcessWriteBuffers(
     VOID
@@ -271,64 +272,48 @@ typedef enum _KAPC_ENVIRONMENT
     InsertApcEnvironment
 } KAPC_ENVIRONMENT;
 
-typedef
-VOID
-(*PKNORMAL_ROUTINE) (
-    IN PVOID NormalContext,
-    IN PVOID SystemArgument1,
-    IN PVOID SystemArgument2
+typedef VOID (*PKNORMAL_ROUTINE) (
+    _In_ PVOID NormalContext,
+    _In_ PVOID SystemArgument1,
+    _In_ PVOID SystemArgument2
     );
 
-typedef
-VOID
-(*PKKERNEL_ROUTINE) (
-    IN struct _KAPC* Apc,
-    IN OUT PKNORMAL_ROUTINE* NormalRoutine,
-    IN OUT PVOID* NormalContext,
-    IN OUT PVOID* SystemArgument1,
-    IN OUT PVOID* SystemArgument2
+typedef VOID (*PKKERNEL_ROUTINE) (
+    _In_ struct _KAPC* Apc,
+    _Inout_ PKNORMAL_ROUTINE* NormalRoutine,
+    _Inout_ PVOID* NormalContext,
+    _Inout_ PVOID* SystemArgument1,
+    _Inout_ PVOID* SystemArgument2
     );
 
-typedef
-VOID
-(*PKRUNDOWN_ROUTINE) (
-    IN struct _KAPC* Apc
+typedef VOID (*PKRUNDOWN_ROUTINE) (
+    _In_ struct _KAPC* Apc
     );
 
-typedef
-BOOLEAN
-(*PKSYNCHRONIZE_ROUTINE) (
-    IN PVOID SynchronizeContext
-    );
-
-typedef
-BOOLEAN
-(*PKTRANSFER_ROUTINE) (
-    VOID
-    );
+typedef BOOLEAN (*PKTRANSFER_ROUTINE)(VOID);
 
 NTSYSAPI
 VOID
 NTAPI
 KeInitializeApc(
-    _Out_ PRKAPC aApc,
-    _In_ PRKTHREAD aThread,
-    _In_ KAPC_ENVIRONMENT aEnvironment,
-    _In_ PKKERNEL_ROUTINE aKernelRoutine,
-    _In_opt_ PKRUNDOWN_ROUTINE aRundownRoutine,
-    _In_opt_ PKNORMAL_ROUTINE aNormalRoutine,
-    _In_opt_ KPROCESSOR_MODE aProcessorMode,
-    _In_opt_ PVOID aNormalContext
+    _Out_    PRKAPC             Apc,
+    _In_     PRKTHREAD          Thread,
+    _In_     KAPC_ENVIRONMENT   Environment,
+    _In_     PKKERNEL_ROUTINE   KernelRoutine,
+    _In_opt_ PKRUNDOWN_ROUTINE  RundownRoutine,
+    _In_opt_ PKNORMAL_ROUTINE   NormalRoutine,
+    _In_opt_ KPROCESSOR_MODE    ProcessorMode,
+    _In_opt_ PVOID              NormalContext
 );
 
 NTSYSAPI
 BOOLEAN
 NTAPI
 KeInsertQueueApc(
-    _Inout_ PRKAPC aApc,
-    _In_opt_ PVOID aSystemArgument1,
-    _In_opt_ PVOID aSystemArgument2,
-    _In_ KPRIORITY aIncrement
+    _Inout_ PRKAPC Apc,
+    _In_opt_ PVOID SystemArgument1,
+    _In_opt_ PVOID SystemArgument2,
+    _In_ KPRIORITY Increment
 );
 
 NTSYSAPI
@@ -369,6 +354,47 @@ KeSignalCallDpcSynchronize(
     _In_ PVOID SystemArgument2
 );
 
+// Fix: unresolved external symbol 'KeInitializeSpinLock'
+#if ((defined(_X86_) && (defined(_WDM_INCLUDED_) || defined(WIN9X_COMPAT_SPINLOCK))) || \
+     ((NTDDI_VERSION > NTDDI_WIN7) && !defined(WIN9X_COMPAT_SPINLOCK) && \
+      (defined(_NTDRIVER_) || defined(_NTDDK_) || defined(_NTIFS_) || defined(_NTHAL_) || defined(_NTOSP_) || defined(_BLDR_))))
+
+#ifndef KeInitializeSpinLock
+
+inline
+VOID
+NTAPI
+_VEIL_IMPL_KeInitializeSpinLock(
+    _Out_ PKSPIN_LOCK SpinLock
+)
+
+/*++
+
+Routine Description:
+
+    This function initializes a spinlock.
+
+Arguments:
+
+    SpinLock - Supplies a pointer to a spinlock.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+    *SpinLock = 0;
+    return;
+}
+
+#if defined _M_X64 || defined _M_ARM || defined _M_ARM64
+_VEIL_DEFINE_IAT_SYMBOL(KeInitializeSpinLock, _VEIL_IMPL_KeInitializeSpinLock);
+#endif
+
+#endif // KeInitializeSpinLock
+#endif
 
 #endif // _KERNEL_MODE
 

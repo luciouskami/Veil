@@ -33,6 +33,9 @@
 
 #pragma once
 
+#ifndef _VEIL_
+#define _VEIL_
+
 #ifdef __cplusplus
 #ifdef VEIL_USE_SEPARATE_NAMESPACE
 #define VEIL_BEGIN() namespace Veil { extern "C" {
@@ -92,6 +95,20 @@
         _VEIL_DECLARE_ALTERNATE_NAME_PREFIX_DATA #alternate_name    \
         ))
 
+// Fix: __imp_ is optimized away
+#ifdef __cplusplus
+#define _VEIL_FORCE_INCLUDE(name) \
+    extern"C" __declspec(selectany) void const* const _VEIL_CONCATENATE(__forceinclude_, name) = reinterpret_cast<void const*>(&name)
+
+#define _VEIL_FORCE_INCLUDE_RAW_SYMBOLS(name) \
+    extern"C" __declspec(selectany) void const* const __identifier(_VEIL_STRINGIZE(_VEIL_CONCATENATE(__forceinclude_, name))) \
+        = reinterpret_cast<void const*>(&__identifier(_VEIL_STRINGIZE(name)))
+#else
+#define _VEIL_FORCE_INCLUDE(name) \
+    extern __declspec(selectany) void const* const _VEIL_CONCATENATE(__forceinclude_, name) = (void const*)(&name)
+
+#define _VEIL_FORCE_INCLUDE_RAW_SYMBOLS(name)
+#endif
 
 // The _VEIL_DEFINE_IAT_SYMBOL macro provides an architecture-neutral way of
 // defining IAT symbols (__imp_- or _imp__-prefixed symbols).
@@ -101,25 +118,39 @@
 #define _VEIL_DEFINE_IAT_SYMBOL_MAKE_NAME(f) _VEIL_CONCATENATE(__imp_, f)
 #endif
 
-#define _VEIL_DEFINE_IAT_SYMBOL_MAKE_NAME_STR(f) _VEIL_STRINGIZE(_VEIL_DEFINE_IAT_SYMBOL_MAKE_NAME(f))
-
 #ifdef __cplusplus
 #define _VEIL_DEFINE_IAT_SYMBOL(sym, fun) \
     extern "C" __declspec(selectany) void const* const _VEIL_DEFINE_IAT_SYMBOL_MAKE_NAME(sym) \
-        = reinterpret_cast<void const*>(&fun)
+        = reinterpret_cast<void const*>(fun); \
+    _VEIL_FORCE_INCLUDE(_VEIL_DEFINE_IAT_SYMBOL_MAKE_NAME(sym))
 
 #define _VEIL_DEFINE_IAT_RAW_SYMBOL(sym, fun) \
     __pragma(warning(suppress:4483)) \
-    extern "C" __declspec(selectany) void const* const __identifier(_VEIL_DEFINE_IAT_SYMBOL_MAKE_NAME_STR(sym)) \
-        = reinterpret_cast<void const*>(&fun)
+    extern "C" __declspec(selectany) void const* const __identifier(_VEIL_STRINGIZE(_VEIL_DEFINE_IAT_SYMBOL_MAKE_NAME(sym))) \
+        = reinterpret_cast<void const*>(fun); \
+    _VEIL_FORCE_INCLUDE_RAW_SYMBOLS(_VEIL_DEFINE_IAT_SYMBOL_MAKE_NAME(sym))
+
 #else
 #define _VEIL_DEFINE_IAT_SYMBOL(sym, fun) \
-    extern __declspec(selectany) void const* const _VEIL_DEFINE_IAT_SYMBOL_MAKE_NAME(sym) \
-        = (void const*)(&fun)
+    extern __declspec(selectany) void const* const _VEIL_DEFINE_IAT_SYMBOL_MAKE_NAME(sym) = (void const*)(fun); \
+    _VEIL_FORCE_INCLUDE(_VEIL_DEFINE_IAT_SYMBOL_MAKE_NAME(sym))
 
 // C don't support __identifier keyword
 #define _VEIL_DEFINE_IAT_RAW_SYMBOL(sym, fun)
 #endif
+
+
+#define VEIL_DECLARE_STRUCT(name) \
+    typedef struct _VEIL_CONCATENATE(_, name) name; \
+    typedef struct _VEIL_CONCATENATE(_, name) * _VEIL_CONCATENATE(P, name); \
+    typedef struct _VEIL_CONCATENATE(_, name) const * _VEIL_CONCATENATE(PC, name); \
+    struct _VEIL_CONCATENATE(_, name)
+
+#define VEIL_DECLARE_UNION(name) \
+    typedef union _VEIL_CONCATENATE(_, name) name; \
+    typedef union _VEIL_CONCATENATE(_, name) * _VEIL_CONCATENATE(P, name); \
+    typedef union _VEIL_CONCATENATE(_, name) const * _VEIL_CONCATENATE(PC, name); \
+    union _VEIL_CONCATENATE(_, name)
 
 
 #ifndef __cplusplus
@@ -190,6 +221,10 @@
 #define  nullptr NULL
 #endif
 
+#ifndef ENABLE_RTL_NUMBER_OF_V2
+#define ENABLE_RTL_NUMBER_OF_V2
+#endif
+
 #if !defined(_KERNEL_MODE) && !defined(__KERNEL_MODE)
 
 //
@@ -220,10 +255,26 @@ struct IUnknown;
 // Kernel-Mode
 //
 
+#ifndef UNICODE
+#define UNICODE 1
+#endif
+
 #include "Veil/Veil.C.stdint.h"
 
+#pragma warning(push)
+#pragma warning(disable:4324) // structure was padded due to __declspec(align())
 #include <fltKernel.h>
 #include <ntimage.h>
+#pragma warning(pop)
+
+#if __has_include(<Windows.h>)
+#define  _NTOS_
+#define  _DEVIOCTL_
+#define  _WINTERNL_
+#define  _NTSECAPI_
+#include "Veil/Veil.System.WinNT.h"
+#include <Windows.h>
+#endif
 
 #endif // if defined(_KERNEL_MODE)
 
@@ -245,3 +296,12 @@ struct IUnknown;
 #include "Veil/Veil.System.Security.h"
 #include "Veil/Veil.System.Etw.h"
 #include "Veil/Veil.System.MinCrypt.h"
+#include "Veil/Veil.System.VirtualDesktop.h"
+#include "Veil/Veil.System.Win32.h"
+#include "Veil/Veil.System.Device.h"
+#include "Veil/Veil.System.PNP.h"
+#include "Veil/Veil.System.TransactionManager.h"
+#include "Veil/Veil.System.VDM.h"
+#include "Veil/Veil.System.Prefetcher.h"
+
+#endif // _VEIL_

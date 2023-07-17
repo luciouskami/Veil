@@ -33,7 +33,7 @@
 
 #pragma once
 
-   // Warnings which disabled for compiling
+// Warnings which disabled for compiling
 #if _MSC_VER >= 1200
 #pragma warning(push)
 // nonstandard extension used : nameless struct/union
@@ -187,7 +187,7 @@ typedef enum _TRACE_CONTROL_INFORMATION_CLASS
     TraceControlUseDescriptorTypeCode = 31,
     TraceControlEnumTraceGroupList = 32,
     TraceControlGetTraceGroupInfo = 33,
-    TraceControlTraceSetDisallowList = 34,
+    TraceControlGetDisallowList = 34,
     TraceControlSetCompressionSettings = 35,
     TraceControlGetCompressionSettings = 36,
     TraceControlUpdatePeriodicCaptureState = 37,
@@ -201,8 +201,7 @@ typedef enum _TRACE_CONTROL_INFORMATION_CLASS
     TraceControlGetPmcOwnership = 45,
 } TRACE_CONTROL_INFORMATION_CLASS;
 
-#if (NTDDI_VERSION >= NTDDI_VISTA)
-NTSYSCALLAPI
+__kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
 NtTraceControl(
@@ -214,7 +213,7 @@ NtTraceControl(
     _Out_ PULONG ReturnLength
 );
 
-NTSYSCALLAPI
+NTSYSAPI
 NTSTATUS
 NTAPI
 ZwTraceControl(
@@ -225,7 +224,27 @@ ZwTraceControl(
     _In_ ULONG TraceInformationLength,
     _Out_ PULONG ReturnLength
 );
-#endif
+
+__kernel_entry NTSYSCALLAPI
+NTSTATUS
+NTAPI
+NtTraceEvent(
+    _In_ HANDLE TraceHandle,
+    _In_ ULONG Flags,
+    _In_ ULONG FieldSize,
+    _In_ PVOID Fields
+);
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+ZwTraceEvent(
+    _In_ HANDLE TraceHandle,
+    _In_ ULONG Flags,
+    _In_ ULONG FieldSize,
+    _In_ PVOID Fields
+);
+
 
 //
 // WMI

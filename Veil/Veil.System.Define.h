@@ -100,6 +100,44 @@ VEIL_BEGIN()
         ((((ULONG_PTR) (_pointer)) & ((_alignment) - 1)) == 0)
 #endif
 
+#ifndef STATIC_ASSERT
+#define STATIC_ASSERT(expr) typedef char __static_assert_t[ (expr) ]
+#endif
+
+typedef void* POINTER_32    PVOID32;
+typedef int                 INT_PTR32;
+typedef unsigned int        UINT_PTR32;
+typedef long                LONG_PTR32;
+typedef unsigned long       ULONG_PTR32;
+
+typedef short               HALF_PTR32, * POINTER_32 PHALF_PTR32;
+typedef unsigned short      UHALF_PTR32, * POINTER_32 PUHALF_PTR32;
+typedef long                SHANDLE_PTR32;
+typedef unsigned long       HANDLE_PTR32;
+
+typedef ULONG_PTR32 SIZE_T32, * POINTER_32 PSIZE_T32;
+typedef LONG_PTR32 SSIZE_T32, * POINTER_32 PSSIZE_T32;
+
+#ifdef STRICT
+typedef void* POINTER_32 HANDLE32;
+#if 0 && (_MSC_VER > 1000)
+#define DECLARE_HANDLE32(name) struct name##__; typedef struct name##__ * POINTER_32 name
+#else
+#define DECLARE_HANDLE32(name) struct name##__{int unused;}; typedef struct name##__ * POINTER_32 name
+#endif
+#else
+typedef PVOID32 HANDLE32;
+#define DECLARE_HANDLE32(name) typedef HANDLE32 name
+#endif
+typedef HANDLE32* POINTER_32 PHANDLE32;
+
+//
+// Legacy thread affinity.
+//
+
+typedef ULONG_PTR32 KAFFINITY32;
+typedef KAFFINITY32* POINTER_32 PKAFFINITY32;
+
 //
 // RC Resource
 //
@@ -109,8 +147,11 @@ VEIL_BEGIN()
 #define IS_INTRESOURCE(_r)  ((((ULONG_PTR)(_r)) >> 16) == 0)
 #define MAKEINTRESOURCEA(i) ((LPSTR)((ULONG_PTR)((WORD)(i))))
 #define MAKEINTRESOURCEW(i) ((LPWSTR)((ULONG_PTR)((WORD)(i))))
-
-#define MAKEINTRESOURCE     MAKEINTRESOURCEW
+#ifdef UNICODE
+#define MAKEINTRESOURCE  MAKEINTRESOURCEW
+#else
+#define MAKEINTRESOURCE  MAKEINTRESOURCEA
+#endif // !UNICODE
 
 #ifndef NORESOURCE
 
@@ -162,6 +203,19 @@ VEIL_BEGIN()
 #endif /* RC_INVOKED */
 
 #endif /* !NORESOURCE */
+
+//
+// Misc
+//
+
+#ifndef INFINITE
+#define INFINITE            0xFFFFFFFF  // Infinite timeout
+#endif
+
+#ifndef INVALID_HANDLE_VALUE
+#define INVALID_HANDLE_VALUE ((HANDLE)(LONG_PTR)-1)
+#endif
+
 #endif // if _KERNEL_MODE
 
 //
@@ -235,7 +289,8 @@ typedef CONST SCHAR* PCSCHAR;
 
 #endif // _WIN32_WINNT >= 0x0600
 
-typedef GUID*   PGUID;
+typedef GUID* PGUID;
+typedef const GUID * PCGUID;
 
 typedef char    CCHAR;  // winnt
 typedef short   CSHORT;
@@ -524,6 +579,11 @@ typedef struct _RTL_BALANCED_NODE {
     ((PRTL_BALANCED_NODE)((Node)->ParentValue & \
                           ~RTL_BALANCED_NODE_RESERVED_PARENT_MASK))
 
+typedef struct _SINGLE_LIST_ENTRY32
+{
+    ULONG Next;
+} SINGLE_LIST_ENTRY32, * POINTER_32 PSINGLE_LIST_ENTRY32;
+
 typedef struct _RTL_RB_TREE
 {
     PRTL_BALANCED_NODE Root;
@@ -733,7 +793,37 @@ typedef PSTRING PUTF8_STRING;
 
 typedef USHORT RTL_ATOM, * PRTL_ATOM;
 
-#ifdef _KERNEL_MODE
+typedef struct _RTL_BALANCED_NODE32
+{
+    union
+    {
+        struct _RTL_BALANCED_NODE32* POINTER_32 Children[2];
+        struct
+        {
+            struct _RTL_BALANCED_NODE32* POINTER_32 Left;
+            struct _RTL_BALANCED_NODE32* POINTER_32 Right;
+        } DUMMYSTRUCTNAME;
+    } DUMMYUNIONNAME;
+
+    union
+    {
+        UCHAR Red : 1;
+        UCHAR Balance : 2;
+        ULONG_PTR32 ParentValue;
+    } DUMMYUNIONNAME2;
+} RTL_BALANCED_NODE32, * POINTER_32 PRTL_BALANCED_NODE32;
+
+STATIC_ASSERT(sizeof(RTL_BALANCED_NODE32) == 12);
+
+typedef struct _RTL_RB_TREE32
+{
+    PRTL_BALANCED_NODE32 Root;
+    PRTL_BALANCED_NODE32 Min;
+} RTL_RB_TREE32, * POINTER_32 PRTL_RB_TREE32;
+
+STATIC_ASSERT(sizeof(RTL_RB_TREE32) == 8);
+
+#if defined(_KERNEL_MODE) && !defined(_WINDOWS_)
 
 //
 // Critical Section
@@ -786,6 +876,10 @@ typedef struct _RTL_CRITICAL_SECTION
 } RTL_CRITICAL_SECTION, * PRTL_CRITICAL_SECTION;
 #pragma pack(pop)
 
+//
+// Slim R/W lock.
+//
+
 typedef struct _RTL_SRWLOCK
 {
     PVOID Ptr;
@@ -798,6 +892,19 @@ typedef struct _RTL_CONDITION_VARIABLE
 } RTL_CONDITION_VARIABLE, * PRTL_CONDITION_VARIABLE;
 #define RTL_CONDITION_VARIABLE_INIT {0}
 #define RTL_CONDITION_VARIABLE_LOCKMODE_SHARED  0x1
+
+//
+// Barrier
+//
+
+typedef struct _RTL_BARRIER
+{
+    DWORD Reserved1;
+    DWORD Reserved2;
+    ULONG_PTR Reserved3[2];
+    DWORD Reserved4;
+    DWORD Reserved5;
+} RTL_BARRIER, * PRTL_BARRIER;
 
 #endif // _KERNEL_MODE
 
