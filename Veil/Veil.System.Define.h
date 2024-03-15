@@ -1,34 +1,11 @@
 /*
  * PROJECT:   Veil
- * FILE:      Veil.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
+ * FILE:      Veil.System.Define.h
+ * PURPOSE:   This file is part of Veil.
  *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
+ * LICENSE:   MIT License
  *
- * DEVELOPER: MiroKaku (50670906+MiroKaku@users.noreply.github.com)
- */
-
-/*
- * PROJECT:   Mouri's Internal NT API Collections (MINT)
- * FILE:      MINT.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
- *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
- *
- * DEVELOPER: Mouri_Naruto (Mouri_Naruto AT Outlook.com)
- */
-
-/*
- * This file is part of the Process Hacker project - https://processhacker.sf.io/
- *
- * You can redistribute this file and/or modify it under the terms of the
- * Attribution 4.0 International (CC BY 4.0) license.
- *
- * You must give appropriate credit, provide a link to the license, and
- * indicate if changes were made. You may do so in any reasonable manner, but
- * not in any way that suggests the licensor endorses you or your use.
+ * DEVELOPER: MiroKaku (kkmi04@outlook.com)
  */
 
 #pragma once
@@ -100,6 +77,64 @@ VEIL_BEGIN()
         ((((ULONG_PTR) (_pointer)) & ((_alignment) - 1)) == 0)
 #endif
 
+
+//
+// Define alignment macros to align structure sizes and pointers up and down.
+//
+
+#ifndef ALIGN_DOWN_BY
+#define ALIGN_DOWN_BY(length, alignment) \
+    ((ULONG_PTR)(length) & ~((ULONG_PTR)(alignment) - 1))
+#endif
+
+#ifndef ALIGN_UP_BY
+#define ALIGN_UP_BY(length, alignment) \
+    (ALIGN_DOWN_BY(((ULONG_PTR)(length) + (alignment) - 1), alignment))
+#endif
+
+#ifndef ALIGN_DOWN_POINTER_BY
+#define ALIGN_DOWN_POINTER_BY(address, alignment) \
+    ((PVOID)((ULONG_PTR)(address) & ~((ULONG_PTR)(alignment) - 1)))
+#endif
+
+#ifndef ALIGN_UP_POINTER_BY
+#define ALIGN_UP_POINTER_BY(address, alignment) \
+    (ALIGN_DOWN_POINTER_BY(((ULONG_PTR)(address) + (alignment) - 1), alignment))
+#endif
+
+#ifndef ALIGN_DOWN
+#define ALIGN_DOWN(length, type) \
+    ALIGN_DOWN_BY(length, sizeof(type))
+#endif
+
+#ifndef ALIGN_UP
+#define ALIGN_UP(length, type) \
+    ALIGN_UP_BY(length, sizeof(type))
+#endif
+
+#ifndef ALIGN_DOWN_POINTER
+#define ALIGN_DOWN_POINTER(address, type) \
+    ALIGN_DOWN_POINTER_BY(address, sizeof(type))
+#endif
+
+#ifndef ALIGN_UP_POINTER
+#define ALIGN_UP_POINTER(address, type) \
+    ALIGN_UP_POINTER_BY(address, sizeof(type))
+#endif
+
+//
+// Calculate the byte offset of a field in a structure of type type.
+//
+
+#ifndef FIELD_OFFSET
+#define FIELD_OFFSET(type, field) ((ULONG)&(((type *)0)->field))
+#endif
+
+#ifndef FIELD_SIZE
+#define FIELD_SIZE(type, field) (sizeof(((type *)0)->field))
+#endif
+
+
 #ifndef STATIC_ASSERT
 #define STATIC_ASSERT(expr) typedef char __static_assert_t[ (expr) ]
 #endif
@@ -126,7 +161,7 @@ typedef void* POINTER_32 HANDLE32;
 #define DECLARE_HANDLE32(name) struct name##__{int unused;}; typedef struct name##__ * POINTER_32 name
 #endif
 #else
-typedef PVOID32 HANDLE32;
+typedef UINT32 HANDLE32;
 #define DECLARE_HANDLE32(name) typedef HANDLE32 name
 #endif
 typedef HANDLE32* POINTER_32 PHANDLE32;
@@ -218,9 +253,95 @@ typedef KAFFINITY32* POINTER_32 PKAFFINITY32;
 
 #endif // if _KERNEL_MODE
 
+#if !defined(ASSERT)
+
+#if DBG
+
+NTSYSAPI
+__analysis_noreturn
+VOID
+NTAPI
+RtlAssert(
+    _In_ PVOID VoidFailedAssertion,
+    _In_ PVOID VoidFileName,
+    _In_ ULONG LineNumber,
+    _In_opt_ PSTR MutableMessage
+);
+
+ULONG
+__cdecl
+DbgPrint(
+    _In_z_ _Printf_format_string_ PCSTR Format,
+    ...
+);
+
+#define ASSERT( exp ) \
+    ((!(exp)) ? \
+        (RtlAssert( (PVOID)#exp, (PVOID)__FILE__, __LINE__, NULL ),FALSE) : \
+        TRUE)
+
+#define ASSERTMSG( msg, exp ) \
+    ((!(exp)) ? \
+        (RtlAssert( (PVOID)#exp, (PVOID)__FILE__, __LINE__, msg ),FALSE) : \
+        TRUE)
+
+#define RTL_SOFT_ASSERT(_exp) \
+    ((!(_exp)) ? \
+        (DbgPrint("%s(%d): Soft assertion failed\n   Expression: %s\n", __FILE__, __LINE__, #_exp),FALSE) : \
+        TRUE)
+
+#define RTL_SOFT_ASSERTMSG(_msg, _exp) \
+    ((!(_exp)) ? \
+        (DbgPrint("%s(%d): Soft assertion failed\n   Expression: %s\n   Message: %s\n", __FILE__, __LINE__, #_exp, (_msg)),FALSE) : \
+        TRUE)
+
+#define RTL_VERIFY         ASSERT
+#define RTL_VERIFYMSG      ASSERTMSG
+
+#define RTL_SOFT_VERIFY    RTL_SOFT_ASSERT
+#define RTL_SOFT_VERIFYMSG RTL_SOFT_ASSERTMSG
+
+#else
+#define ASSERT( exp )         ((void) 0)
+#define ASSERTMSG( msg, exp ) ((void) 0)
+
+#define RTL_SOFT_ASSERT(_exp)          ((void) 0)
+#define RTL_SOFT_ASSERTMSG(_msg, _exp) ((void) 0)
+
+#define RTL_VERIFY( exp )         ((exp) ? TRUE : FALSE)
+#define RTL_VERIFYMSG( msg, exp ) ((exp) ? TRUE : FALSE)
+
+#define RTL_SOFT_VERIFY(_exp)         ((_exp) ? TRUE : FALSE)
+#define RTL_SOFT_VERIFYMSG(msg, _exp) ((_exp) ? TRUE : FALSE)
+
+#endif // DBG
+
+#endif // !defined(ASSERT)
+
 //
 // ntdef
 //
+
+//
+// Object Attributes
+//
+
+// Valid values for the Attributes field
+
+#define OBJ_PROTECT_CLOSE                   0x00000001L
+#define OBJ_INHERIT                         0x00000002L
+#define OBJ_AUDIT_OBJECT_CLOSE              0x00000004L
+#define OBJ_NO_RIGHTS_UPGRADE               0x00000008L
+#define OBJ_PERMANENT                       0x00000010L
+#define OBJ_EXCLUSIVE                       0x00000020L
+#define OBJ_CASE_INSENSITIVE                0x00000040L
+#define OBJ_OPENIF                          0x00000080L
+#define OBJ_OPENLINK                        0x00000100L
+#define OBJ_KERNEL_HANDLE                   0x00000200L
+#define OBJ_FORCE_ACCESS_CHECK              0x00000400L
+#define OBJ_IGNORE_IMPERSONATED_DEVICEMAP   0x00000800L
+#define OBJ_DONT_REPARSE                    0x00001000L
+#define OBJ_VALID_ATTRIBUTES                0x00001FF2L
 
 #ifndef _NTDEF_
 #define _NTDEF_
@@ -289,8 +410,15 @@ typedef CONST SCHAR* PCSCHAR;
 
 #endif // _WIN32_WINNT >= 0x0600
 
-typedef GUID* PGUID;
-typedef const GUID * PCGUID;
+#ifndef __LPGUID_DEFINED__
+#define __LPGUID_DEFINED__
+typedef GUID* LPGUID;
+#endif
+
+#ifndef __LPCGUID_DEFINED__
+#define __LPCGUID_DEFINED__
+typedef const GUID* LPCGUID;
+#endif
 
 typedef char    CCHAR;  // winnt
 typedef short   CSHORT;
@@ -584,12 +712,6 @@ typedef struct _SINGLE_LIST_ENTRY32
     ULONG Next;
 } SINGLE_LIST_ENTRY32, * POINTER_32 PSINGLE_LIST_ENTRY32;
 
-typedef struct _RTL_RB_TREE
-{
-    PRTL_BALANCED_NODE Root;
-    PRTL_BALANCED_NODE Min;
-} RTL_RB_TREE, * PRTL_RB_TREE;
-
 typedef struct _STRING32 {
     USHORT   Length;
     USHORT   MaximumLength;
@@ -616,26 +738,6 @@ typedef UNICODE_STRING64* PUNICODE_STRING64;
 
 typedef STRING64 ANSI_STRING64;
 typedef ANSI_STRING64* PANSI_STRING64;
-
-//
-// Object Attributes
-//
-
-// Valid values for the Attributes field
-
-#define OBJ_PROTECT_CLOSE                   0x00000001L
-#define OBJ_INHERIT                         0x00000002L
-#define OBJ_AUDIT_OBJECT_CLOSE              0x00000004L
-#define OBJ_PERMANENT                       0x00000010L
-#define OBJ_EXCLUSIVE                       0x00000020L
-#define OBJ_CASE_INSENSITIVE                0x00000040L
-#define OBJ_OPENIF                          0x00000080L
-#define OBJ_OPENLINK                        0x00000100L
-#define OBJ_KERNEL_HANDLE                   0x00000200L
-#define OBJ_FORCE_ACCESS_CHECK              0x00000400L
-#define OBJ_IGNORE_IMPERSONATED_DEVICEMAP   0x00000800L
-#define OBJ_DONT_REPARSE                    0x00001000L
-#define OBJ_VALID_ATTRIBUTES                0x00001FF2L
 
 typedef struct _OBJECT_ATTRIBUTES
 {

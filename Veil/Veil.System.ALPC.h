@@ -1,34 +1,11 @@
 /*
  * PROJECT:   Veil
- * FILE:      Veil.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
+ * FILE:      Veil.System.ALPC.h
+ * PURPOSE:   This file is part of Veil.
  *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
+ * LICENSE:   MIT License
  *
- * DEVELOPER: MiroKaku (50670906+MiroKaku@users.noreply.github.com)
- */
-
-/*
- * PROJECT:   Mouri's Internal NT API Collections (MINT)
- * FILE:      MINT.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
- *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
- *
- * DEVELOPER: Mouri_Naruto (Mouri_Naruto AT Outlook.com)
- */
-
-/*
- * This file is part of the Process Hacker project - https://processhacker.sf.io/
- *
- * You can redistribute this file and/or modify it under the terms of the
- * Attribution 4.0 International (CC BY 4.0) license.
- *
- * You must give appropriate credit, provide a link to the license, and
- * indicate if changes were made. You may do so in any reasonable manner, but
- * not in any way that suggests the licensor endorses you or your use.
+ * DEVELOPER: MiroKaku (kkmi04@outlook.com)
  */
 
 #pragma once
@@ -851,7 +828,6 @@ typedef struct _ALPC_MESSAGE_HANDLE_INFORMATION
 
 // System calls
 
-#if (NTDDI_VERSION >= NTDDI_VISTA)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -1155,7 +1131,7 @@ NtAlpcConnectPort(
     _In_ ULONG Flags,
     _In_opt_ PSID RequiredServerSid,
     _Inout_updates_bytes_to_opt_(*BufferLength, *BufferLength) PPORT_MESSAGE ConnectionMessage,
-    _Inout_opt_ PULONG BufferLength,
+    _Inout_opt_ PSIZE_T BufferLength,
     _Inout_opt_ PALPC_MESSAGE_ATTRIBUTES OutMessageAttributes,
     _Inout_opt_ PALPC_MESSAGE_ATTRIBUTES InMessageAttributes,
     _In_opt_ PLARGE_INTEGER Timeout
@@ -1173,7 +1149,7 @@ ZwAlpcConnectPort(
     _In_ ULONG Flags,
     _In_opt_ PSID RequiredServerSid,
     _Inout_updates_bytes_to_opt_(*BufferLength, *BufferLength) PPORT_MESSAGE ConnectionMessage,
-    _Inout_opt_ PULONG BufferLength,
+    _Inout_opt_ PSIZE_T BufferLength,
     _Inout_opt_ PALPC_MESSAGE_ATTRIBUTES OutMessageAttributes,
     _Inout_opt_ PALPC_MESSAGE_ATTRIBUTES InMessageAttributes,
     _In_opt_ PLARGE_INTEGER Timeout
@@ -1419,8 +1395,8 @@ NTAPI
 AlpcInitializeMessageAttribute(
     _In_ ULONG AttributeFlags,
     _Out_opt_ PALPC_MESSAGE_ATTRIBUTES Buffer,
-    _In_ ULONG BufferSize,
-    _Out_ PULONG RequiredBufferSize
+    _In_ SIZE_T BufferSize,
+    _Out_ PSIZE_T RequiredBufferSize
 );
 
 NTSYSAPI
@@ -1449,7 +1425,6 @@ AlpcUnregisterCompletionList(
     _In_ HANDLE PortHandle
 );
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
 // rev
 NTSYSAPI
 NTSTATUS
@@ -1457,7 +1432,6 @@ NTAPI
 AlpcRundownCompletionList(
     _In_ HANDLE PortHandle
 );
-#endif
 
 NTSYSAPI
 NTSTATUS
@@ -1521,7 +1495,6 @@ AlpcGetCompletionListMessageAttributes(
     _In_ PPORT_MESSAGE Message
 );
 #endif // !_KERNEL_MODE
-#endif // Vista
 
 
 VEIL_END()

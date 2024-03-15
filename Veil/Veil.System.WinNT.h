@@ -1,12 +1,11 @@
 /*
  * PROJECT:   Veil
- * FILE:      Veil.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
+ * FILE:      Veil.System.WinNT.h
+ * PURPOSE:   This file is part of Veil.
  *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
+ * LICENSE:   MIT License
  *
- * DEVELOPER: MiroKaku (50670906+MiroKaku@users.noreply.github.com)
+ * DEVELOPER: MiroKaku (kkmi04@outlook.com)
  */
 
 #pragma once
@@ -124,11 +123,18 @@ typedef LONG(NTAPI* PVECTORED_EXCEPTION_HANDLER)(
 // FLS (Fiber Local Storage)
 //
 
+#ifndef _WINNT_
 typedef
+_IRQL_requires_same_
+_Function_class_(FLS_CALLBACK_FUNCTION)
 VOID
-(NTAPI* PFLS_CALLBACK_FUNCTION) (
+NTAPI
+FLS_CALLBACK_FUNCTION (
     _In_ PVOID lpFlsData
     );
+
+typedef FLS_CALLBACK_FUNCTION* PFLS_CALLBACK_FUNCTION;
+#endif
 
 //
 // APC (Asynchronous Procedure Calls)

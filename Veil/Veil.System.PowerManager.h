@@ -1,34 +1,11 @@
 /*
  * PROJECT:   Veil
- * FILE:      Veil.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
+ * FILE:      Veil.System.PowerManager.h
+ * PURPOSE:   This file is part of Veil.
  *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
+ * LICENSE:   MIT License
  *
- * DEVELOPER: MiroKaku (50670906+MiroKaku@users.noreply.github.com)
- */
-
-/*
- * PROJECT:   Mouri's Internal NT API Collections (MINT)
- * FILE:      MINT.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
- *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
- *
- * DEVELOPER: Mouri_Naruto (Mouri_Naruto AT Outlook.com)
- */
-
-/*
- * This file is part of the Process Hacker project - https://processhacker.sf.io/
- *
- * You can redistribute this file and/or modify it under the terms of the
- * Attribution 4.0 International (CC BY 4.0) license.
- *
- * You must give appropriate credit, provide a link to the license, and
- * indicate if changes were made. You may do so in any reasonable manner, but
- * not in any way that suggests the licensor endorses you or your use.
+ * DEVELOPER: MiroKaku (kkmi04@outlook.com)
  */
 
 #pragma once
@@ -105,30 +82,24 @@ typedef enum _POWER_STATE_TYPE
     DevicePowerState
 } POWER_STATE_TYPE, * PPOWER_STATE_TYPE;
 
-#if (NTDDI_VERSION >= NTDDI_VISTA)
-typedef struct _SYSTEM_POWER_STATE_CONTEXT
-{
-    union
-    {
-        struct
-        {
-            ULONG   Reserved1 : 8;
-            ULONG   TargetSystemState : 4;
-            ULONG   EffectiveSystemState : 4;
-            ULONG   CurrentSystemState : 4;
-            ULONG   IgnoreHibernationPath : 1;
-            ULONG   PseudoTransition : 1;
-            ULONG   KernelSoftReboot : 1;
+typedef struct _SYSTEM_POWER_STATE_CONTEXT {
+    union {
+        struct {
+            ULONG   Reserved1               : 8;
+            ULONG   TargetSystemState       : 4;
+            ULONG   EffectiveSystemState    : 4;
+            ULONG   CurrentSystemState      : 4;
+            ULONG   IgnoreHibernationPath   : 1;
+            ULONG   PseudoTransition        : 1;
+            ULONG   KernelSoftReboot        : 1;
             ULONG   DirectedDripsTransition : 1;
-            ULONG   Reserved2 : 8;
-        };
+            ULONG   Reserved2               : 8;
+        } DUMMYSTRUCTNAME;
 
         ULONG ContextAsUlong;
-    };
-} SYSTEM_POWER_STATE_CONTEXT, * PSYSTEM_POWER_STATE_CONTEXT;
-#endif // (NTDDI_VERSION >= NTDDI_VISTA)
+    } DUMMYUNIONNAME;
+} SYSTEM_POWER_STATE_CONTEXT, *PSYSTEM_POWER_STATE_CONTEXT;
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
 typedef struct _COUNTED_REASON_CONTEXT
 {
     ULONG Version;
@@ -146,7 +117,6 @@ typedef struct _COUNTED_REASON_CONTEXT
         UNICODE_STRING SimpleString;
     };
 } COUNTED_REASON_CONTEXT, * PCOUNTED_REASON_CONTEXT;
-#endif // (NTDDI_VERSION >= NTDDI_WIN7)
 #endif // !_KERNEL_MODE
 
 typedef enum _REQUESTER_TYPE
@@ -193,6 +163,7 @@ typedef struct _DIAGNOSTIC_BUFFER
     SIZE_T ReasonOffset; // PCOUNTED_REASON_CONTEXT_RELATIVE
 } DIAGNOSTIC_BUFFER, * PDIAGNOSTIC_BUFFER;
 
+// rev
 typedef struct _WAKE_TIMER_INFO
 {
     SIZE_T OffsetToNext;
@@ -218,8 +189,9 @@ typedef struct PROCESSOR_IDLE_TIMES
     ULONG Reserved[4];
 } PROCESSOR_IDLE_TIMES, * PPROCESSOR_IDLE_TIMES;
 
+typedef
 _Function_class_(PROCESSOR_IDLE_HANDLER)
-typedef NTSTATUS(FASTCALL PROCESSOR_IDLE_HANDLER)(
+NTSTATUS FASTCALL PROCESSOR_IDLE_HANDLER(
     _In_ ULONG_PTR Context,
     _Inout_ PPROCESSOR_IDLE_TIMES IdleTimes
     );
@@ -448,7 +420,7 @@ typedef enum _POWER_INFORMATION_LEVEL_INTERNAL
     PowerInternalUserAbsencePredictionCapability, // POWER_USER_ABSENCE_PREDICTION_CAPABILITY
     PowerInternalPoProcessorLatencyHint, // POWER_PROCESSOR_LATENCY_HINT
     PowerInternalStandbyNetworkRequest, // POWER_STANDBY_NETWORK_REQUEST (requires PopNetBIServiceSid)
-    PowerInternalDirtyTransitionInformation,
+    PowerInternalDirtyTransitionInformation, // out: BOOLEAN
     PowerInternalSetBackgroundTaskState, // POWER_SET_BACKGROUND_TASK_STATE
     PowerInternalTtmOpenTerminal,
     PowerInternalTtmCreateTerminal, // 10
@@ -459,8 +431,8 @@ typedef enum _POWER_INFORMATION_LEVEL_INTERNAL
     PowerInternalTtmAssignDevice,
     PowerInternalTtmSetDisplayState,
     PowerInternalTtmSetDisplayTimeouts,
-    PowerInternalBootSessionStandbyActivationInformation,
-    PowerInternalSessionPowerState,
+    PowerInternalBootSessionStandbyActivationInformation, // out: POWER_BOOT_SESSION_STANDBY_ACTIVATION_INFO
+    PowerInternalSessionPowerState, // in: POWER_SESSION_POWER_STATE
     PowerInternalSessionTerminalInput, // 20
     PowerInternalSetWatchdog,
     PowerInternalPhysicalPowerButtonPressInfoAtBoot,
@@ -527,11 +499,12 @@ typedef enum _POWER_INFORMATION_LEVEL_INTERNAL
     PowerInternalOverrideSystemInitiatedRebootState,
     PowerInternalFanImpactStats,
     PowerInternalFanRpmBuckets,
-    PowerInternalPowerBootAppDiagInfo,
+    PowerInternalPowerBootAppDiagInfo, // out: POWER_INTERNAL_BOOTAPP_DIAGNOSTIC
     PowerInternalUnregisterShutdownNotification, // since 22H1
     PowerInternalManageTransitionStateRecord,
     PowerInternalGetAcpiTimeAndAlarmCapabilities, // since 22H2
     PowerInternalSuspendResumeRequest,
+    PowerInternalEnergyEstimationInfo, // since 23H2
     PowerInformationInternalMaximum
 } POWER_INFORMATION_LEVEL_INTERNAL;
 
@@ -635,17 +608,24 @@ typedef struct _POWER_INTERNAL_HOST_ENERGY_SAVER_STATE
     BOOLEAN EsEnabledOnHost;
 } POWER_INTERNAL_HOST_ENERGY_SAVER_STATE, * PPOWER_INTERNAL_HOST_ENERGY_SAVER_STATE;
 
-typedef struct POWER_INTERNAL_PROCESSOR_BRANDED_FREQENCY_INPUT
+typedef struct _POWER_INTERNAL_PROCESSOR_BRANDED_FREQENCY_INPUT
 {
     POWER_INFORMATION_LEVEL_INTERNAL InternalType;
     PROCESSOR_NUMBER ProcessorNumber; // ULONG_MAX
 } POWER_INTERNAL_PROCESSOR_BRANDED_FREQENCY_INPUT, * PPOWER_INTERNAL_PROCESSOR_BRANDED_FREQENCY_INPUT;
 
-typedef struct POWER_INTERNAL_PROCESSOR_BRANDED_FREQENCY_OUTPUT
+typedef struct _POWER_INTERNAL_PROCESSOR_BRANDED_FREQENCY_OUTPUT
 {
     ULONG Version;
     ULONG NominalFrequency; // if (Domain) Prcb->PowerState.CheckContext.Domain.NominalFrequency else Prcb->MHz
 } POWER_INTERNAL_PROCESSOR_BRANDED_FREQENCY_OUTPUT, * PPOWER_INTERNAL_PROCESSOR_BRANDED_FREQENCY_OUTPUT;
+
+// rev
+typedef struct _POWER_INTERNAL_BOOTAPP_DIAGNOSTIC
+{
+    ULONG BootAppErrorDiagCode; // bcdedit last status
+    ULONG BootAppFailureStatus; // bcdedit last status
+} POWER_INTERNAL_BOOTAPP_DIAGNOSTIC, * PPOWER_INTERNAL_BOOTAPP_DIAGNOSTIC;
 
 _IRQL_requires_max_(APC_LEVEL)
 __kernel_entry NTSYSCALLAPI
@@ -687,23 +667,6 @@ ZwSetThreadExecutionState(
     _In_ EXECUTION_STATE NewFlags, // ES_* flags
     _Out_ EXECUTION_STATE* PreviousFlags
 );
-
-#if (NTDDI_VERSION < NTDDI_WIN7)
-__kernel_entry NTSYSCALLAPI
-NTSTATUS
-NTAPI
-NtRequestWakeupLatency(
-    _In_ LATENCY_TIME latency
-);
-
-_IRQL_requires_max_(PASSIVE_LEVEL)
-NTSYSAPI
-NTSTATUS
-NTAPI
-ZwRequestWakeupLatency(
-    _In_ LATENCY_TIME latency
-);
-#endif
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS

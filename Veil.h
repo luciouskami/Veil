@@ -1,34 +1,11 @@
 /*
  * PROJECT:   Veil
  * FILE:      Veil.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
+ * PURPOSE:   This file is part of Veil.
  *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
+ * LICENSE:   MIT License
  *
- * DEVELOPER: MiroKaku (50670906+MiroKaku@users.noreply.github.com)
- */
-
-/*
- * PROJECT:   Mouri's Internal NT API Collections (MINT)
- * FILE:      MINT.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
- *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
- *
- * DEVELOPER: Mouri_Naruto (Mouri_Naruto AT Outlook.com)
- */
-
-/*
- * This file is part of the Process Hacker project - https://processhacker.sf.io/
- *
- * You can redistribute this file and/or modify it under the terms of the
- * Attribution 4.0 International (CC BY 4.0) license.
- *
- * You must give appropriate credit, provide a link to the license, and
- * indicate if changes were made. You may do so in any reasonable manner, but
- * not in any way that suggests the licensor endorses you or your use.
+ * DEVELOPER: MiroKaku (kkmi04@outlook.com)
  */
 
 #pragma once
@@ -146,6 +123,12 @@
     typedef struct _VEIL_CONCATENATE(_, name) const * _VEIL_CONCATENATE(PC, name); \
     struct _VEIL_CONCATENATE(_, name)
 
+#define VEIL_DECLARE_STRUCT_ALIGN(name, x) \
+    typedef struct _VEIL_CONCATENATE(_, name) name; \
+    typedef struct _VEIL_CONCATENATE(_, name) * _VEIL_CONCATENATE(P, name); \
+    typedef struct _VEIL_CONCATENATE(_, name) const * _VEIL_CONCATENATE(PC, name); \
+    __declspec(align(x)) struct _VEIL_CONCATENATE(_, name)
+
 #define VEIL_DECLARE_UNION(name) \
     typedef union _VEIL_CONCATENATE(_, name) name; \
     typedef union _VEIL_CONCATENATE(_, name) * _VEIL_CONCATENATE(P, name); \
@@ -201,15 +184,22 @@
 #define NTDDI_WIN10_RS3                     0x0A000004      // Windows 10.0.16299 / 1709 / Redstone 3
 #define NTDDI_WIN10_RS4                     0x0A000005      // Windows 10.0.17134 / 1803 / Redstone 4
 #define NTDDI_WIN10_RS5                     0x0A000006      // Windows 10.0.17763 / 1809 / Redstone 5
-#define NTDDI_WIN10_19H1                    0x0A000007      // Windows 10.0.18362 / 1903 / 19H1
+#define NTDDI_WIN10_19H1                    0x0A000007      // Windows 10.0.18362 / 1903 / Titanium - 19H1
+                                                            // Windows 10.0.18363 / 1909 / Titanium - 19H2
 #define NTDDI_WIN10_VB                      0x0A000008      // Windows 10.0.19041 / 2004 / Vibranium
 #define NTDDI_WIN10_MN                      0x0A000009      // Windows 10.0.19042 / 20H2 / Manganese
 #define NTDDI_WIN10_FE                      0x0A00000A      // Windows 10.0.19043 / 21H1 / Ferrum
 #define NTDDI_WIN10_CO                      0x0A00000B      // Windows 10.0.19044 / 21H2 / Cobalt
+                                                            // Windows 10.0.19045 / 22H2
 #define NTDDI_WIN11_CO                      NTDDI_WIN10_CO  // Windows 10.0.22000 / 21H2 / Cobalt
 #define NTDDI_WIN11                         NTDDI_WIN11_CO
 #define NTDDI_WIN10_NI                      0x0A00000C      // Windows 10.0.22621 / 22H2 / Nickel
 #define NTDDI_WIN11_NI                      NTDDI_WIN10_NI  // Windows 10.0.22621 / 22H2 / Nickel
+#define NTDDI_WIN10_CU                      0x0A00000D      // Windows 10.0.22631 / 22H2 / Copper
+#define NTDDI_WIN11_CU                      NTDDI_WIN10_CU  // Windows 10.0.22631 / 23H2 / Copper
+
+ // Fix WDK
+#define NTDDI_THRESHOLD                     NTDDI_WINTHRESHOLD
 
 #ifndef __cplusplus
 #ifndef __bool_true_false_are_defined
@@ -224,6 +214,9 @@
 #ifndef ENABLE_RTL_NUMBER_OF_V2
 #define ENABLE_RTL_NUMBER_OF_V2
 #endif
+
+// Disable winternl.h
+#define  _WINTERNL_
 
 #if !defined(_KERNEL_MODE) && !defined(__KERNEL_MODE)
 
@@ -259,6 +252,10 @@ struct IUnknown;
 #define UNICODE 1
 #endif
 
+#if __has_include(<Windows.h>)
+#define _UNKNOWN_H_ // fix: Unknownbase.h and unknown.h conflict
+#endif 
+
 #include "Veil/Veil.C.stdint.h"
 
 #pragma warning(push)
@@ -268,12 +265,13 @@ struct IUnknown;
 #pragma warning(pop)
 
 #if __has_include(<Windows.h>)
+#define  WIN32_LEAN_AND_MEAN
 #define  _NTOS_
 #define  _DEVIOCTL_
-#define  _WINTERNL_
 #define  _NTSECAPI_
 #include "Veil/Veil.System.WinNT.h"
 #include <Windows.h>
+#include <Unknwn.h>
 #endif
 
 #endif // if defined(_KERNEL_MODE)

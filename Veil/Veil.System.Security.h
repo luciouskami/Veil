@@ -1,34 +1,11 @@
 /*
  * PROJECT:   Veil
- * FILE:      Veil.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
+ * FILE:      Veil.System.Security.h
+ * PURPOSE:   This file is part of Veil.
  *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
+ * LICENSE:   MIT License
  *
- * DEVELOPER: MiroKaku (50670906+MiroKaku@users.noreply.github.com)
- */
-
-/*
- * PROJECT:   Mouri's Internal NT API Collections (MINT)
- * FILE:      MINT.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
- *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
- *
- * DEVELOPER: Mouri_Naruto (Mouri_Naruto AT Outlook.com)
- */
-
-/*
- * This file is part of the Process Hacker project - https://processhacker.sf.io/
- *
- * You can redistribute this file and/or modify it under the terms of the
- * Attribution 4.0 International (CC BY 4.0) license.
- *
- * You must give appropriate credit, provide a link to the license, and
- * indicate if changes were made. You may do so in any reasonable manner, but
- * not in any way that suggests the licensor endorses you or your use.
+ * DEVELOPER: MiroKaku (kkmi04@outlook.com)
  */
 
 #pragma once
@@ -720,7 +697,6 @@ ZwImpersonateAnonymousToken(
     _In_ HANDLE ThreadHandle
 );
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
 // rev
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -747,7 +723,6 @@ ZwQuerySecurityAttributesToken(
     _In_ ULONG Length,
     _Out_ PULONG ReturnLength
 );
-#endif
 
 //
 // Access checking
@@ -1281,13 +1256,11 @@ ZwPrivilegedServiceAuditAlarm(
 
 //#pragma comment(lib, "ksecdd.lib")
 
-#if (NTDDI_VERSION >= NTDDI_VISTA)
 typedef struct _LSA_LAST_INTER_LOGON_INFO {
     LARGE_INTEGER LastSuccessfulLogon;
     LARGE_INTEGER LastFailedLogon;
     ULONG FailedAttemptCountSinceLastSuccessfulLogon;
 } LSA_LAST_INTER_LOGON_INFO, * PLSA_LAST_INTER_LOGON_INFO;
-#endif // NTDDI_VERSION >= NTDDI_VISTA
 
 typedef struct _SECURITY_LOGON_SESSION_DATA {
     ULONG               Size;
@@ -1308,8 +1281,6 @@ typedef struct _SECURITY_LOGON_SESSION_DATA {
     LSA_UNICODE_STRING  DnsDomainName;
     LSA_UNICODE_STRING  Upn;
 
-#if (NTDDI_VERSION >= NTDDI_VISTA)
-
     //
     // new for LH
     //
@@ -1328,7 +1299,6 @@ typedef struct _SECURITY_LOGON_SESSION_DATA {
     LARGE_INTEGER PasswordCanChange;
     LARGE_INTEGER PasswordMustChange;
 
-#endif
 } SECURITY_LOGON_SESSION_DATA, * PSECURITY_LOGON_SESSION_DATA;
 
 NTKERNELAPI

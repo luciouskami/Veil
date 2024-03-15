@@ -1,34 +1,11 @@
 /*
  * PROJECT:   Veil
- * FILE:      Veil.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
+ * FILE:      Veil.System.Executive.h
+ * PURPOSE:   This file is part of Veil.
  *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
+ * LICENSE:   MIT License
  *
- * DEVELOPER: MiroKaku (50670906+MiroKaku@users.noreply.github.com)
- */
-
-/*
- * PROJECT:   Mouri's Internal NT API Collections (MINT)
- * FILE:      MINT.h
- * PURPOSE:   Definition for the Windows Internal API from ntdll.dll,
- *            samlib.dll and winsta.dll
- *
- * LICENSE:   Relicensed under The MIT License from The CC BY 4.0 License
- *
- * DEVELOPER: Mouri_Naruto (Mouri_Naruto AT Outlook.com)
- */
-
-/*
- * This file is part of the Process Hacker project - https://processhacker.sf.io/
- *
- * You can redistribute this file and/or modify it under the terms of the
- * Attribution 4.0 International (CC BY 4.0) license.
- *
- * You must give appropriate credit, provide a link to the license, and
- * indicate if changes were made. You may do so in any reasonable manner, but
- * not in any way that suggests the licensor endorses you or your use.
+ * DEVELOPER: MiroKaku (kkmi04@outlook.com)
  */
 
 #pragma once
@@ -124,7 +101,7 @@ NTSTATUS
 NTAPI
 NtQuerySystemEnvironmentValueEx(
     _In_ PUNICODE_STRING VariableName,
-    _In_ PGUID VendorGuid,
+    _In_ LPCGUID VendorGuid,
     _Out_writes_bytes_opt_(*ValueLength) PVOID Value,
     _Inout_ PULONG ValueLength,
     _Out_opt_ PULONG Attributes // EFI_VARIABLE_*
@@ -136,7 +113,7 @@ NTSTATUS
 NTAPI
 ZwQuerySystemEnvironmentValueEx(
     _In_ PUNICODE_STRING VariableName,
-    _In_ PGUID VendorGuid,
+    _In_ LPCGUID VendorGuid,
     _Out_writes_bytes_opt_(*ValueLength) PVOID Value,
     _Inout_ PULONG ValueLength,
     _Out_opt_ PULONG Attributes
@@ -147,7 +124,7 @@ NTSTATUS
 NTAPI
 NtSetSystemEnvironmentValueEx(
     _In_ PUNICODE_STRING VariableName,
-    _In_ PGUID VendorGuid,
+    _In_ LPCGUID VendorGuid,
     _In_reads_bytes_opt_(ValueLength) PVOID Value,
     _In_ ULONG ValueLength, // 0 = delete variable
     _In_ ULONG Attributes   // EFI_VARIABLE_*
@@ -159,7 +136,7 @@ NTSTATUS
 NTAPI
 ZwSetSystemEnvironmentValueEx(
     _In_ PUNICODE_STRING VariableName,
-    _In_ PGUID VendorGuid,
+    _In_ LPCGUID VendorGuid,
     _In_reads_bytes_opt_(ValueLength) PVOID Value,
     _In_ ULONG ValueLength,
     _In_ ULONG Attributes
@@ -1099,9 +1076,6 @@ typedef enum _TIMER_SET_INFORMATION_CLASS
     MaxTimerInfoClass
 } TIMER_SET_INFORMATION_CLASS;
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
-struct _COUNTED_REASON_CONTEXT;
-
 typedef struct _TIMER_SET_COALESCABLE_TIMER_INFO
 {
     _In_ LARGE_INTEGER DueTime;
@@ -1112,7 +1086,6 @@ typedef struct _TIMER_SET_COALESCABLE_TIMER_INFO
     _In_ ULONG TolerableDelay;
     _Out_opt_ PBOOLEAN PreviousState;
 } TIMER_SET_COALESCABLE_TIMER_INFO, * PTIMER_SET_COALESCABLE_TIMER_INFO;
-#endif
 #endif // _KERNEL_MODE
 
 __kernel_entry NTSYSCALLAPI
@@ -1177,7 +1150,6 @@ ZwSetTimer(
     _Out_opt_ PBOOLEAN PreviousState
 );
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -1196,7 +1168,6 @@ ZwSetTimerEx(
     _Inout_updates_bytes_opt_(TimerSetInformationLength) PVOID TimerSetInformation,
     _In_ ULONG TimerSetInformationLength
 );
-#endif
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -1382,7 +1353,6 @@ ZwCreateProfile(
     _In_ KAFFINITY Affinity
 );
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -1415,7 +1385,6 @@ ZwCreateProfileEx(
     _In_ USHORT GroupCount,
     _In_reads_(GroupCount) PGROUP_AFFINITY GroupAffinity
 );
-#endif
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -1497,7 +1466,7 @@ NtCreateKeyedEvent(
     _Out_ PHANDLE KeyedEventHandle,
     _In_ ACCESS_MASK DesiredAccess,
     _In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
-    _In_ ULONG Flags
+    _Reserved_ ULONG Flags
 );
 
 _IRQL_requires_max_(PASSIVE_LEVEL)
@@ -1508,7 +1477,7 @@ ZwCreateKeyedEvent(
     _Out_ PHANDLE KeyedEventHandle,
     _In_ ACCESS_MASK DesiredAccess,
     _In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
-    _In_ ULONG Flags
+    _Reserved_ ULONG Flags
 );
 
 __kernel_entry NTSYSCALLAPI
@@ -1534,7 +1503,7 @@ __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
 NtReleaseKeyedEvent(
-    _In_ HANDLE KeyedEventHandle,
+    _In_opt_ HANDLE KeyedEventHandle,
     _In_ PVOID KeyValue,
     _In_ BOOLEAN Alertable,
     _In_opt_ PLARGE_INTEGER Timeout
@@ -1545,7 +1514,7 @@ NTSYSAPI
 NTSTATUS
 NTAPI
 ZwReleaseKeyedEvent(
-    _In_ HANDLE KeyedEventHandle,
+    _In_opt_ HANDLE KeyedEventHandle,
     _In_ PVOID KeyValue,
     _In_ BOOLEAN Alertable,
     _In_opt_ PLARGE_INTEGER Timeout
@@ -1555,7 +1524,7 @@ __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
 NtWaitForKeyedEvent(
-    _In_ HANDLE KeyedEventHandle,
+    _In_opt_ HANDLE KeyedEventHandle,
     _In_ PVOID KeyValue,
     _In_ BOOLEAN Alertable,
     _In_opt_ PLARGE_INTEGER Timeout
@@ -1566,7 +1535,7 @@ NTSYSAPI
 NTSTATUS
 NTAPI
 ZwWaitForKeyedEvent(
-    _In_ HANDLE KeyedEventHandle,
+    _In_opt_ HANDLE KeyedEventHandle,
     _In_ PVOID KeyValue,
     _In_ BOOLEAN Alertable,
     _In_opt_ PLARGE_INTEGER Timeout
@@ -1576,7 +1545,6 @@ ZwWaitForKeyedEvent(
 // UMS
 //
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -1591,7 +1559,6 @@ NTAPI
 ZwUmsThreadYield(
     _In_ PVOID SchedulerParam
 );
-#endif
 
 //
 // WNF
@@ -1948,7 +1915,6 @@ typedef struct _WORKER_FACTORY_BASIC_INFORMATION
 
 // end_private
 
-#if (NTDDI_VERSION >= NTDDI_VISTA)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -2093,7 +2059,7 @@ NtWaitForWorkViaWorkerFactory(
     _Out_writes_to_(Count, *PacketsReturned) struct _FILE_IO_COMPLETION_INFORMATION* MiniPackets,
     _In_ ULONG Count,
     _Out_ PULONG PacketsReturned,
-    _In_ struct _WORKER_FACTORY_DEFERRED_WORK* DeferredWork
+    _In_ PWORKER_FACTORY_DEFERRED_WORK DeferredWork
 );
 
 _IRQL_requires_max_(PASSIVE_LEVEL)
@@ -2105,7 +2071,7 @@ ZwWaitForWorkViaWorkerFactory(
     _Out_writes_to_(Count, *PacketsReturned) struct _FILE_IO_COMPLETION_INFORMATION* MiniPackets,
     _In_ ULONG Count,
     _Out_ PULONG PacketsReturned,
-    _In_ struct _WORKER_FACTORY_DEFERRED_WORK* DeferredWork
+    _In_ PWORKER_FACTORY_DEFERRED_WORK DeferredWork
 );
 
 #else
@@ -2128,7 +2094,6 @@ ZwWaitForWorkViaWorkerFactory(
 );
 
 #endif // (NTDDI_VERSION >= NTDDI_WIN8)
-#endif // (NTDDI_VERSION >= NTDDI_VISTA)
 
 //
 // Time
@@ -2247,10 +2212,10 @@ __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
 NtConvertBetweenAuxiliaryCounterAndPerformanceCounter(
-    _In_opt_ PLARGE_INTEGER AuxiliaryCounterValue,
-    _Inout_ PLARGE_INTEGER PerformanceCounterValue,
-    _Out_ PLARGE_INTEGER PerformanceOrAuxiliaryCounterValue,
-    _Out_ PLARGE_INTEGER ConversionError
+    _In_  BOOLEAN ConvertAuxiliaryToPerformanceCounter,
+    _In_  PLARGE_INTEGER PerformanceOrAuxiliaryCounterValue,
+    _Out_ PLARGE_INTEGER ConvertedValue,
+    _Out_opt_ PLARGE_INTEGER ConversionError
 );
 
 _IRQL_requires_max_(PASSIVE_LEVEL)
@@ -2258,10 +2223,10 @@ NTSYSAPI
 NTSTATUS
 NTAPI
 ZwConvertBetweenAuxiliaryCounterAndPerformanceCounter(
-    _In_opt_ PLARGE_INTEGER AuxiliaryCounterValue,
-    _Inout_ PLARGE_INTEGER PerformanceCounterValue,
-    _Out_ PLARGE_INTEGER PerformanceOrAuxiliaryCounterValue,
-    _Out_ PLARGE_INTEGER ConversionError
+    _In_  BOOLEAN ConvertAuxiliaryToPerformanceCounter,
+    _In_  PLARGE_INTEGER PerformanceOrAuxiliaryCounterValue,
+    _Out_ PLARGE_INTEGER ConvertedValue,
+    _Out_opt_ PLARGE_INTEGER ConversionError
 );
 #endif
 
@@ -3043,18 +3008,18 @@ typedef enum _EVENT_TRACE_INFORMATION_CLASS
     EventTraceTimeProfileInformation, // EVENT_TRACE_TIME_PROFILE_INFORMATION
     EventTraceSessionSecurityInformation, // EVENT_TRACE_SESSION_SECURITY_INFORMATION
     EventTraceSpinlockInformation, // EVENT_TRACE_SPINLOCK_INFORMATION
-    EventTraceStackTracingInformation, // EVENT_TRACE_SYSTEM_EVENT_INFORMATION
+    EventTraceStackTracingInformation, // EVENT_TRACE_STACK_TRACING_INFORMATION
     EventTraceExecutiveResourceInformation, // EVENT_TRACE_EXECUTIVE_RESOURCE_INFORMATION
     EventTraceHeapTracingInformation, // EVENT_TRACE_HEAP_TRACING_INFORMATION
     EventTraceHeapSummaryTracingInformation, // EVENT_TRACE_HEAP_TRACING_INFORMATION
-    EventTracePoolTagFilterInformation, // EVENT_TRACE_TAG_FILTER_INFORMATION
-    EventTracePebsTracingInformation, // EVENT_TRACE_SYSTEM_EVENT_INFORMATION
-    EventTraceProfileConfigInformation, // EVENT_TRACE_PROFILE_COUNTER_INFORMATION
+    EventTracePoolTagFilterInformation, // EVENT_TRACE_POOLTAG_FILTER_INFORMATION
+    EventTracePebsTracingInformation, // EVENT_TRACE_PEBS_TRACING_INFORMATION
+    EventTraceProfileConfigInformation, // EVENT_TRACE_PROFILE_CONFIG_INFORMATION
     EventTraceProfileSourceListInformation, // EVENT_TRACE_PROFILE_LIST_INFORMATION
-    EventTraceProfileEventListInformation, // EVENT_TRACE_SYSTEM_EVENT_INFORMATION
+    EventTraceProfileEventListInformation, // EVENT_TRACE_PROFILE_EVENT_INFORMATION
     EventTraceProfileCounterListInformation, // EVENT_TRACE_PROFILE_COUNTER_INFORMATION
     EventTraceStackCachingInformation, // EVENT_TRACE_STACK_CACHING_INFORMATION
-    EventTraceObjectTypeFilterInformation, // EVENT_TRACE_TAG_FILTER_INFORMATION
+    EventTraceObjectTypeFilterInformation, // EVENT_TRACE_OBJECT_TYPE_FILTER_INFORMATION
     EventTraceSoftRestartInformation, // EVENT_TRACE_SOFT_RESTART_INFORMATION
     EventTraceLastBranchConfigurationInformation, // REDSTONE3
     EventTraceLastBranchEventListInformation,
@@ -3063,7 +3028,7 @@ typedef enum _EVENT_TRACE_INFORMATION_CLASS
     EventTraceProcessorTraceConfigurationInformation,
     EventTraceProcessorTraceEventListInformation,
     EventTraceCoverageSamplerInformation, // EVENT_TRACE_COVERAGE_SAMPLER_INFORMATION
-    EventTraceUnifiedStackCachingInformation, // sicne 21H1
+    EventTraceUnifiedStackCachingInformation, // since 21H1
     MaxEventTraceInfoClass
 } EVENT_TRACE_INFORMATION_CLASS;
 
@@ -3575,7 +3540,7 @@ typedef struct _ETW_STACK_CACHING_CONFIG
 #define WMI_LOG_TYPE_UDP_FAIL                       (EVENT_TRACE_GROUP_UDPIP | EVENT_TRACE_TYPE_CONNFAIL)
 
 //
-// Netowrk events with IPV6
+// Network events with IPV6
 //
 #define WMI_LOG_TYPE_TCPIP_SEND_IPV6                (EVENT_TRACE_GROUP_TCPIP | 0x1A)
 #define WMI_LOG_TYPE_TCPIP_RECEIVE_IPV6             (EVENT_TRACE_GROUP_TCPIP | 0x1B)
@@ -4161,6 +4126,11 @@ typedef struct _EVENT_TRACE_TAG_FILTER_INFORMATION
     ULONG Filter[1];
 } EVENT_TRACE_TAG_FILTER_INFORMATION, * PEVENT_TRACE_TAG_FILTER_INFORMATION;
 
+// ProfileSource
+#define ETW_MAX_PROFILING_SOURCES 4
+#define ETW_MAX_PMC_EVENTS        4
+#define ETW_MAX_PMC_COUNTERS      4
+
 typedef struct _EVENT_TRACE_PROFILE_COUNTER_INFORMATION
 {
     EVENT_TRACE_INFORMATION_CLASS EventTraceInformationClass;
@@ -4550,7 +4520,17 @@ typedef enum _WATCHDOG_HANDLER_ACTION
     WdActionQueryState
 } WATCHDOG_HANDLER_ACTION;
 
-typedef NTSTATUS(*PSYSTEM_WATCHDOG_HANDLER)(_In_ WATCHDOG_HANDLER_ACTION Action, _In_ PVOID Context, _Inout_ PULONG DataValue, _In_ BOOLEAN NoLocks);
+typedef
+_Function_class_(SYSTEM_WATCHDOG_HANDLER)
+NTSTATUS
+NTAPI
+SYSTEM_WATCHDOG_HANDLER(
+    _In_ WATCHDOG_HANDLER_ACTION Action,
+    _In_ PVOID Context,
+    _Inout_ PULONG DataValue,
+    _In_ BOOLEAN NoLocks
+);
+typedef SYSTEM_WATCHDOG_HANDLER *PSYSTEM_WATCHDOG_HANDLER;
 
 // private
 typedef struct _SYSTEM_WATCHDOG_HANDLER_INFORMATION
@@ -4578,7 +4558,7 @@ typedef struct _SYSTEM_WATCHDOG_TIMER_INFORMATION
 {
     WATCHDOG_INFORMATION_CLASS WdInfoClass;
     ULONG DataValue;
-} SYSTEM_WATCHDOG_TIMER_INFORMATION, PSYSTEM_WATCHDOG_TIMER_INFORMATION;
+} SYSTEM_WATCHDOG_TIMER_INFORMATION, *PSYSTEM_WATCHDOG_TIMER_INFORMATION;
 
 #ifndef _KERNEL_MODE
 // private
@@ -5018,7 +4998,7 @@ typedef struct _ST_STATS_SPACE_BITMAP
     SIZE_T CompressedBytes;
     ULONG BytesPerBit;
     UCHAR StoreBitmap[1];
-} ST_STATS_SPACE_BITMAP, PST_STATS_SPACE_BITMAP;
+} ST_STATS_SPACE_BITMAP, *PST_STATS_SPACE_BITMAP;
 
 // rev
 typedef struct _ST_STATS
@@ -5270,7 +5250,7 @@ typedef struct _SMC_CACHE_STATS_REQUEST
 typedef struct _SM_REGISTRATION_INFO
 {
     HANDLE CachesUpdatedEvent;
-} SM_REGISTRATION_INFO, PSM_REGISTRATION_INFO;
+} SM_REGISTRATION_INFO, *PSM_REGISTRATION_INFO;
 
 typedef struct _SM_REGISTRATION_REQUEST
 {
@@ -6140,6 +6120,48 @@ typedef struct _SYSTEM_SUPPORTED_PROCESSOR_ARCHITECTURES_INFORMATION
 } SYSTEM_SUPPORTED_PROCESSOR_ARCHITECTURES_INFORMATION, * PSYSTEM_SUPPORTED_PROCESSOR_ARCHITECTURES_INFORMATION;
 #endif
 
+#define PROCESSOR_INTEL_386     386
+#define PROCESSOR_INTEL_486     486
+#define PROCESSOR_INTEL_PENTIUM 586
+#define PROCESSOR_INTEL_IA64    2200
+#define PROCESSOR_AMD_X8664     8664
+#define PROCESSOR_MIPS_R4000    4000    // incl R4101 & R3910 for Windows CE
+#define PROCESSOR_ALPHA_21064   21064
+#define PROCESSOR_PPC_601       601
+#define PROCESSOR_PPC_603       603
+#define PROCESSOR_PPC_604       604
+#define PROCESSOR_PPC_620       620
+#define PROCESSOR_HITACHI_SH3   10003   // Windows CE
+#define PROCESSOR_HITACHI_SH3E  10004   // Windows CE
+#define PROCESSOR_HITACHI_SH4   10005   // Windows CE
+#define PROCESSOR_MOTOROLA_821  821     // Windows CE
+#define PROCESSOR_SHx_SH3       103     // Windows CE
+#define PROCESSOR_SHx_SH4       104     // Windows CE
+#define PROCESSOR_STRONGARM     2577    // Windows CE - 0xA11
+#define PROCESSOR_ARM720        1824    // Windows CE - 0x720
+#define PROCESSOR_ARM820        2080    // Windows CE - 0x820
+#define PROCESSOR_ARM920        2336    // Windows CE - 0x920
+#define PROCESSOR_ARM_7TDMI     70001   // Windows CE
+#define PROCESSOR_OPTIL         0x494f  // MSIL
+
+#define PROCESSOR_ARCHITECTURE_INTEL            0
+#define PROCESSOR_ARCHITECTURE_MIPS             1
+#define PROCESSOR_ARCHITECTURE_ALPHA            2
+#define PROCESSOR_ARCHITECTURE_PPC              3
+#define PROCESSOR_ARCHITECTURE_SHX              4
+#define PROCESSOR_ARCHITECTURE_ARM              5
+#define PROCESSOR_ARCHITECTURE_IA64             6
+#define PROCESSOR_ARCHITECTURE_ALPHA64          7
+#define PROCESSOR_ARCHITECTURE_MSIL             8
+#define PROCESSOR_ARCHITECTURE_AMD64            9
+#define PROCESSOR_ARCHITECTURE_IA32_ON_WIN64    10
+#define PROCESSOR_ARCHITECTURE_NEUTRAL          11
+#define PROCESSOR_ARCHITECTURE_ARM64            12
+#define PROCESSOR_ARCHITECTURE_ARM32_ON_WIN64   13
+#define PROCESSOR_ARCHITECTURE_IA32_ON_ARM64    14
+
+#define PROCESSOR_ARCHITECTURE_UNKNOWN 0xFFFF
+
 // private
 typedef struct _SYSTEM_MEMORY_USAGE_INFORMATION
 {
@@ -6329,7 +6351,11 @@ typedef struct _SYSTEM_SPECULATION_CONTROL_INFORMATION
             ULONG BhbDisabledSystemPolicy : 1;
             ULONG BhbDisabledNoHardwareSupport : 1;
             ULONG Reserved2 : 3;
-            ULONG Reserved : 21;
+            ULONG RdclHardwareProtectedReported : 1;
+            ULONG RdclHardwareProtected : 1;
+            ULONG Reserved3 : 4;
+            ULONG Reserved4 : 3;
+            ULONG Reserved : 12;
         };
     } SpeculationControlFlags2;
 
@@ -6423,7 +6449,9 @@ typedef union _SECURE_SPECULATION_CONTROL_INFORMATION
     ULONG SsbdRequired : 1;
     ULONG BpbKernelToUser : 1;
     ULONG BpbUserToKernel : 1;
-    ULONG Reserved : 18;
+    ULONG ReturnSpeculate : 1;
+    ULONG BranchConfusionSafe : 1;
+    ULONG Reserved : 16;
 } SECURE_SPECULATION_CONTROL_INFORMATION, * PSECURE_SPECULATION_CONTROL_INFORMATION;
 
 // private
@@ -6627,7 +6655,6 @@ ZwQuerySystemInformation(
     _Out_opt_ PULONG ReturnLength
 );
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -6652,7 +6679,6 @@ ZwQuerySystemInformationEx(
     _In_ ULONG SystemInformationLength,
     _Out_opt_ PULONG ReturnLength
 );
-#endif
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -6769,6 +6795,10 @@ typedef enum _ALTERNATIVE_ARCHITECTURE_TYPE
 #define SHARED_GLOBAL_FLAGS_STATE_SEPARATION_ENABLED_V 0xA
 #define SHARED_GLOBAL_FLAGS_STATE_SEPARATION_ENABLED   \
     (1UL << SHARED_GLOBAL_FLAGS_STATE_SEPARATION_ENABLED_V)
+
+#define SHARED_GLOBAL_FLAGS_SET_GLOBAL_DATA_FLAG        0x40000000
+
+#define SHARED_GLOBAL_FLAGS_CLEAR_GLOBAL_DATA_FLAG      0x80000000
 
 #define EX_INIT_BITS(Flags, Bit) \
     *((Flags)) |= (Bit)             // Safe to use before concurrently accessible
@@ -7092,19 +7122,19 @@ typedef struct _KUSER_SHARED_DATA {
             // The following bit fields are for the debugger only. Do not use.
             // Use the bit definitions instead.
             //
-
-            ULONG DbgErrorPortPresent : 1;
-            ULONG DbgElevationEnabled : 1;
-            ULONG DbgVirtEnabled : 1;
+            
+            ULONG DbgErrorPortPresent       : 1;
+            ULONG DbgElevationEnabled       : 1;
+            ULONG DbgVirtEnabled            : 1;
             ULONG DbgInstallerDetectEnabled : 1;
-            ULONG DbgLkgEnabled : 1;
-            ULONG DbgDynProcessorEnabled : 1;
-            ULONG DbgConsoleBrokerEnabled : 1;
-            ULONG DbgSecureBootEnabled : 1;
-            ULONG DbgMultiSessionSku : 1;
+            ULONG DbgLkgEnabled             : 1;
+            ULONG DbgDynProcessorEnabled    : 1;
+            ULONG DbgConsoleBrokerEnabled   : 1;
+            ULONG DbgSecureBootEnabled      : 1;
+            ULONG DbgMultiSessionSku        : 1;
             ULONG DbgMultiUsersInSessionSku : 1;
             ULONG DbgStateSeparationEnabled : 1;
-            ULONG SpareBits : 21;
+            ULONG SpareBits                 : 21;
         } DUMMYSTRUCTNAME2;
     } DUMMYUNIONNAME2;
 
@@ -7228,7 +7258,7 @@ typedef struct _KUSER_SHARED_DATA {
     //
     // A bitmask of enclave features supported on this system.
     //
-    // N.B. This field must be accessed via the RtlIsEnclareFeaturePresent API for an
+    // N.B. This field must be accessed via the RtlIsEnclaveFeaturePresent API for an
     //      accurate result.
     //
 
@@ -7341,102 +7371,102 @@ typedef struct _KUSER_SHARED_DATA {
 // int 2e, and that no other values exist presently for the SystemCall field.
 //
 
-C_ASSERT(SYSTEM_CALL_SYSCALL == 0);
-C_ASSERT(SYSTEM_CALL_INT_2E  == 1);
+STATIC_ASSERT(SYSTEM_CALL_SYSCALL == 0);
+STATIC_ASSERT(SYSTEM_CALL_INT_2E  == 1);
 
 //
 // The overall size can change, but it must be the same for all architectures.
 //
 
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TickCountLowDeprecated) == 0x0);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TickCountMultiplier) == 0x4);
-C_ASSERT(__alignof(KSYSTEM_TIME) == 4);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, InterruptTime) == 0x08);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SystemTime) == 0x014);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeZoneBias) == 0x020);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ImageNumberLow) == 0x02c);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ImageNumberHigh) == 0x02e);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NtSystemRoot) == 0x030);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, MaxStackTraceDepth) == 0x238);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, CryptoExponent) == 0x23c);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeZoneId) == 0x240);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, LargePageMinimum) == 0x244);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, AitSamplingValue) == 0x248);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, AppCompatFlag) == 0x24c);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, RNGSeedVersion) == 0x250);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, GlobalValidationRunlevel) == 0x258);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeZoneBiasStamp) == 0x25c);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NtBuildNumber) == 0x260);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NtProductType) == 0x264);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ProductTypeIsValid) == 0x268);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NativeProcessorArchitecture) == 0x26a);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NtMajorVersion) == 0x26c);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NtMinorVersion) == 0x270);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ProcessorFeatures) == 0x274);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Reserved1) == 0x2b4);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Reserved3) == 0x2b8);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeSlip) == 0x2bc);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, AlternativeArchitecture) == 0x2c0);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SystemExpirationDate) == 0x2c8);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SuiteMask) == 0x2d0);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, KdDebuggerEnabled) == 0x2d4);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, MitigationPolicies) == 0x2d5);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, CyclesPerYield) == 0x2d6);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ActiveConsoleId) == 0x2d8);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, DismountCount) == 0x2dc);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ComPlusPackage) == 0x2e0);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, LastSystemRITEventTickCount) == 0x2e4);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NumberOfPhysicalPages) == 0x2e8);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SafeBootMode) == 0x2ec);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, VirtualizationFlags) == 0x2ed);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Reserved12) == 0x2ee);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TickCountLowDeprecated) == 0x0);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TickCountMultiplier) == 0x4);
+STATIC_ASSERT(__alignof(KSYSTEM_TIME) == 4);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, InterruptTime) == 0x08);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SystemTime) == 0x014);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeZoneBias) == 0x020);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ImageNumberLow) == 0x02c);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ImageNumberHigh) == 0x02e);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NtSystemRoot) == 0x030);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, MaxStackTraceDepth) == 0x238);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, CryptoExponent) == 0x23c);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeZoneId) == 0x240);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, LargePageMinimum) == 0x244);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, AitSamplingValue) == 0x248);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, AppCompatFlag) == 0x24c);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, RNGSeedVersion) == 0x250);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, GlobalValidationRunlevel) == 0x258);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeZoneBiasStamp) == 0x25c);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NtBuildNumber) == 0x260);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NtProductType) == 0x264);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ProductTypeIsValid) == 0x268);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NativeProcessorArchitecture) == 0x26a);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NtMajorVersion) == 0x26c);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NtMinorVersion) == 0x270);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ProcessorFeatures) == 0x274);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Reserved1) == 0x2b4);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Reserved3) == 0x2b8);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeSlip) == 0x2bc);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, AlternativeArchitecture) == 0x2c0);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SystemExpirationDate) == 0x2c8);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SuiteMask) == 0x2d0);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, KdDebuggerEnabled) == 0x2d4);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, MitigationPolicies) == 0x2d5);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, CyclesPerYield) == 0x2d6);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ActiveConsoleId) == 0x2d8);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, DismountCount) == 0x2dc);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ComPlusPackage) == 0x2e0);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, LastSystemRITEventTickCount) == 0x2e4);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, NumberOfPhysicalPages) == 0x2e8);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SafeBootMode) == 0x2ec);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, VirtualizationFlags) == 0x2ed);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Reserved12) == 0x2ee);
 
 #if defined(_MSC_EXTENSIONS)
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SharedDataFlags) == 0x2f0);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SharedDataFlags) == 0x2f0);
 #endif
 
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TestRetInstruction) == 0x2f8);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcFrequency) == 0x300);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SystemCall) == 0x308);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Reserved2) == 0x30c);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SystemCallPad) == 0x310);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TestRetInstruction) == 0x2f8);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcFrequency) == 0x300);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SystemCall) == 0x308);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Reserved2) == 0x30c);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, SystemCallPad) == 0x310);
 
 #if defined(_MSC_EXTENSIONS)
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TickCount) == 0x320);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TickCountQuad) == 0x320);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TickCount) == 0x320);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TickCountQuad) == 0x320);
 #endif
 
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Cookie) == 0x330);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ConsoleSessionForegroundProcessId) == 0x338);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeUpdateLock) == 0x340);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, BaselineSystemTimeQpc) == 0x348);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, BaselineInterruptTimeQpc) == 0x350);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcSystemTimeIncrement) == 0x358);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcInterruptTimeIncrement) == 0x360);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcSystemTimeIncrementShift) == 0x368);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcInterruptTimeIncrementShift) == 0x369);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, UnparkedProcessorCount) == 0x36a);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, EnclaveFeatureMask) == 0x36c);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TelemetryCoverageRound) == 0x37c);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, UserModeGlobalLogger) == 0x380);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ImageFileExecutionOptions) == 0x3a0);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, LangGenerationCount) == 0x3a4);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Reserved4) == 0x3a8);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, InterruptTimeBias) == 0x3b0);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcBias) == 0x3b8);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ActiveProcessorCount) == 0x3c0);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ActiveGroupCount) == 0x3c4);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Reserved9) == 0x3c5);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcData) == 0x3c6);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcBypassEnabled) == 0x3c6);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcShift) == 0x3c7);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeZoneBiasEffectiveStart) == 0x3c8);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeZoneBiasEffectiveEnd) == 0x3d0);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, XState) == 0x3d8);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Cookie) == 0x330);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ConsoleSessionForegroundProcessId) == 0x338);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeUpdateLock) == 0x340);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, BaselineSystemTimeQpc) == 0x348);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, BaselineInterruptTimeQpc) == 0x350);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcSystemTimeIncrement) == 0x358);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcInterruptTimeIncrement) == 0x360);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcSystemTimeIncrementShift) == 0x368);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcInterruptTimeIncrementShift) == 0x369);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, UnparkedProcessorCount) == 0x36a);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, EnclaveFeatureMask) == 0x36c);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TelemetryCoverageRound) == 0x37c);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, UserModeGlobalLogger) == 0x380);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ImageFileExecutionOptions) == 0x3a0);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, LangGenerationCount) == 0x3a4);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Reserved4) == 0x3a8);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, InterruptTimeBias) == 0x3b0);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcBias) == 0x3b8);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ActiveProcessorCount) == 0x3c0);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, ActiveGroupCount) == 0x3c4);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, Reserved9) == 0x3c5);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcData) == 0x3c6);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcBypassEnabled) == 0x3c6);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, QpcShift) == 0x3c7);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeZoneBiasEffectiveStart) == 0x3c8);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, TimeZoneBiasEffectiveEnd) == 0x3d0);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, XState) == 0x3d8);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, FeatureConfigurationChangeStamp) == 0x720);
+STATIC_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, UserPointerAuthMask) == 0x730);
 #if !defined(WINDOWS_IGNORE_PACKING_MISMATCH)
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, FeatureConfigurationChangeStamp) == 0x720);
-C_ASSERT(FIELD_OFFSET(KUSER_SHARED_DATA, UserPointerAuthMask) == 0x730);
-C_ASSERT(sizeof(KUSER_SHARED_DATA) == 0x738);
+STATIC_ASSERT(sizeof(KUSER_SHARED_DATA) == 0x738);
 #endif
 
 #endif /* __midl | MIDL_PASS */
@@ -7455,19 +7485,18 @@ NtGetTickCount(
     VOID
 ) {
 #ifdef _WIN64
-
-    return (ULONG)((USER_SHARED_DATA->TickCountQuad * USER_SHARED_DATA->TickCountMultiplier) >> 24);
+    return (ULONG)((SharedUserData->TickCountQuad * SharedUserData->TickCountMultiplier) >> 24);
 #else
     ULARGE_INTEGER tickCount;
     while (TRUE) {
-        tickCount.HighPart = (ULONG)USER_SHARED_DATA->TickCount.High1Time;
-        tickCount.LowPart = USER_SHARED_DATA->TickCount.LowPart;
-        if (tickCount.HighPart == (ULONG)USER_SHARED_DATA->TickCount.High2Time)
+        tickCount.HighPart = (ULONG)SharedUserData->TickCount.High1Time;
+        tickCount.LowPart = SharedUserData->TickCount.LowPart;
+        if (tickCount.HighPart == (ULONG)SharedUserData->TickCount.High2Time)
             break;
         YieldProcessor();
     }
-    return (ULONG)((UInt32x32To64(tickCount.LowPart, USER_SHARED_DATA->TickCountMultiplier) >> 24) +
-        UInt32x32To64((tickCount.HighPart << 8) & 0xffffffff, USER_SHARED_DATA->TickCountMultiplier));
+    return (ULONG)((UInt32x32To64(tickCount.LowPart, SharedUserData->TickCountMultiplier) >> 24) +
+        UInt32x32To64((tickCount.HighPart << 8) & 0xffffffff, SharedUserData->TickCountMultiplier));
 #endif
 }
 
@@ -7479,25 +7508,22 @@ NtGetTickCount64(
     ULARGE_INTEGER tickCount;
 
 #ifdef _WIN64
-    tickCount.QuadPart = USER_SHARED_DATA->TickCountQuad;
+    tickCount.QuadPart = SharedUserData->TickCountQuad;
 #else
     while (TRUE) {
-        tickCount.HighPart = (ULONG)USER_SHARED_DATA->TickCount.High1Time;
-        tickCount.LowPart = USER_SHARED_DATA->TickCount.LowPart;
-        if (tickCount.HighPart == (ULONG)USER_SHARED_DATA->TickCount.High2Time)
+        tickCount.HighPart = (ULONG)SharedUserData->TickCount.High1Time;
+        tickCount.LowPart = SharedUserData->TickCount.LowPart;
+        if (tickCount.HighPart == (ULONG)SharedUserData->TickCount.High2Time)
             break;
         YieldProcessor();
     }
 #endif
-    return (UInt32x32To64(tickCount.LowPart, USER_SHARED_DATA->TickCountMultiplier) >> 24) +
-        (UInt32x32To64(tickCount.HighPart, USER_SHARED_DATA->TickCountMultiplier) << 8);
+    return (UInt32x32To64(tickCount.LowPart, SharedUserData->TickCountMultiplier) >> 24) +
+        (UInt32x32To64(tickCount.HighPart, SharedUserData->TickCountMultiplier) << 8);
 }
 
 #define ZwGetTickCount    NtGetTickCount
 #define ZwGetTickCount64  NtGetTickCount64
-
-#define RtlGetTickCount   NtGetTickCount
-#define RtlGetTickCount64 NtGetTickCount64
 
 //
 // Locale
@@ -7552,7 +7578,6 @@ ZwQueryInstallUILanguage(
     _Out_ LANGID* InstallUILanguageId
 );
 
-#if (NTDDI_VERSION >= NTDDI_VISTA)
 // private
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -7570,7 +7595,6 @@ ZwFlushInstallUILanguage(
     _In_ LANGID InstallUILanguage,
     _In_ ULONG SetComittedFlag
 );
-#endif
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -7602,7 +7626,6 @@ ZwSetDefaultUILanguage(
     _In_ LANGID DefaultUILanguageId
 );
 
-#if (NTDDI_VERSION >= NTDDI_VISTA)
 // private
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -7618,7 +7641,6 @@ NTAPI
 ZwIsUILanguageComitted(
     VOID
 );
-#endif
 
 //
 // NLS
@@ -7626,8 +7648,6 @@ ZwIsUILanguageComitted(
 
 // begin_private
 
-#if (NTDDI_VERSION >= NTDDI_VISTA)
-#if (NTDDI_VERSION >= NTDDI_WIN7)
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
 NTAPI
@@ -7646,28 +7666,6 @@ ZwInitializeNlsFiles(
     _Out_ PLCID DefaultLocaleId,
     _Out_ PLARGE_INTEGER DefaultCasingTableSize
 );
-#else
-__kernel_entry NTSYSCALLAPI
-NTSTATUS
-NTAPI
-NtInitializeNlsFiles(
-    _Out_ PVOID* BaseAddress,
-    _Out_ PLCID DefaultLocaleId,
-    _Out_ PLARGE_INTEGER DefaultCasingTableSize,
-    _Out_opt_ PULONG CurrentNLSVersion
-);
-
-_IRQL_requires_max_(PASSIVE_LEVEL)
-NTSYSAPI
-NTSTATUS
-NTAPI
-ZwInitializeNlsFiles(
-    _Out_ PVOID* BaseAddress,
-    _Out_ PLCID DefaultLocaleId,
-    _Out_ PLARGE_INTEGER DefaultCasingTableSize,
-    _Out_opt_ PULONG CurrentNLSVersion
-);
-#endif
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -7691,42 +7689,6 @@ ZwGetNlsSectionPtr(
     _Out_ PVOID* SectionPointer,
     _Out_ PULONG SectionSize
 );
-
-#if (NTDDI_VERSION < NTDDI_WIN7)
-__kernel_entry NTSYSCALLAPI
-NTSTATUS
-NTAPI
-NtAcquireCMFViewOwnership(
-    _Out_ PULONGLONG TimeStamp,
-    _Out_ PBOOLEAN tokenTaken,
-    _In_ BOOLEAN replaceExisting
-);
-
-_IRQL_requires_max_(PASSIVE_LEVEL)
-NTSYSAPI
-NTSTATUS
-NTAPI
-ZwAcquireCMFViewOwnership(
-    _Out_ PULONGLONG TimeStamp,
-    _Out_ PBOOLEAN tokenTaken,
-    _In_ BOOLEAN replaceExisting
-);
-
-__kernel_entry NTSYSCALLAPI
-NTSTATUS
-NTAPI
-NtReleaseCMFViewOwnership(
-    VOID
-);
-
-_IRQL_requires_max_(PASSIVE_LEVEL)
-NTSYSAPI
-NTSTATUS
-NTAPI
-ZwReleaseCMFViewOwnership(
-    VOID
-);
-#endif
 
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -7771,7 +7733,6 @@ ZwGetMUIRegistryInfo(
     _Inout_ PULONG DataSize,
     _Out_ PVOID Data
 );
-#endif
 
 // end_private
 
@@ -8070,7 +8031,6 @@ ZwDisplayString(
 // Boot graphics
 //
 
-#if (NTDDI_VERSION >= NTDDI_WIN7)
 // rev
 __kernel_entry NTSYSCALLAPI
 NTSTATUS
@@ -8086,7 +8046,6 @@ NTAPI
 ZwDrawText(
     _In_ PUNICODE_STRING Text
 );
-#endif
 
 //
 // Executive
@@ -8201,6 +8160,107 @@ ExReleaseCacheAwarePushLockExclusive(
 );
 
 #if (NTDDI_VERSION >= NTDDI_WIN10_NI)
+
+#pragma warning(suppress: 28195) // memory is not always allocated here, sometimes we reuse an entry from the list
+__drv_allocatesMem(Mem)
+_IRQL_requires_max_(APC_LEVEL)
+inline
+PVOID
+_VEIL_IMPL_ExAllocateFromPagedLookasideList(
+    _Inout_ PPAGED_LOOKASIDE_LIST Lookaside
+)
+
+/*++
+
+Routine Description:
+
+    This function removes (pops) the first entry from the specified
+    paged lookaside list.
+
+Arguments:
+
+    Lookaside - Supplies a pointer to a paged lookaside list structure.
+
+Return Value:
+
+    If an entry is removed from the specified lookaside list, then the
+    address of the entry is returned as the function value. Otherwise,
+    NULL is returned.
+
+--*/
+
+{
+
+    PVOID Entry;
+
+    Lookaside->L.TotalAllocates += 1;
+    Entry = InterlockedPopEntrySList(&Lookaside->L.ListHead);
+    if (Entry == NULL) {
+        Lookaside->L.AllocateMisses += 1;
+        Entry = (Lookaside->L.Allocate)(Lookaside->L.Type,
+            Lookaside->L.Size,
+            Lookaside->L.Tag);
+    }
+
+    return Entry;
+}
+
+_IRQL_requires_max_(APC_LEVEL)
+inline
+VOID
+_VEIL_IMPL_ExFreeToPagedLookasideList(
+    _Inout_ PPAGED_LOOKASIDE_LIST Lookaside,
+    _In_ __drv_freesMem(Mem) PVOID Entry
+)
+
+/*++
+
+Routine Description:
+
+    This function inserts (pushes) the specified entry into the specified
+    paged lookaside list.
+
+Arguments:
+
+    Lookaside - Supplies a pointer to a nonpaged lookaside list structure.
+
+    Entry - Supples a pointer to the entry that is inserted in the
+        lookaside list.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    Lookaside->L.TotalFrees += 1;
+    if (ExQueryDepthSList(&Lookaside->L.ListHead) >= Lookaside->L.Depth) {
+        Lookaside->L.FreeMisses += 1;
+        (Lookaside->L.Free)(Entry);
+
+    }
+    else {
+        InterlockedPushEntrySList(&Lookaside->L.ListHead,
+            (PSLIST_ENTRY)Entry);
+    }
+
+    return;
+}
+
+#if defined _M_IX86
+
+_VEIL_DEFINE_IAT_RAW_SYMBOL(ExAllocateFromPagedLookasideList@4, _VEIL_IMPL_ExAllocateFromPagedLookasideList);
+_VEIL_DEFINE_IAT_RAW_SYMBOL(ExFreeToPagedLookasideList@8, _VEIL_IMPL_ExFreeToPagedLookasideList);
+
+#elif defined _M_X64 || defined _M_ARM || defined _M_ARM64
+
+_VEIL_DEFINE_IAT_SYMBOL(ExAllocateFromPagedLookasideList, _VEIL_IMPL_ExAllocateFromPagedLookasideList);
+_VEIL_DEFINE_IAT_SYMBOL(ExFreeToPagedLookasideList, _VEIL_IMPL_ExFreeToPagedLookasideList);
+
+#endif
+
 
 __drv_allocatesMem(Mem)
 _IRQL_requires_max_(DISPATCH_LEVEL)
@@ -8327,6 +8387,109 @@ _VEIL_DEFINE_IAT_SYMBOL(ExAllocateFromNPagedLookasideList, _VEIL_IMPL_ExAllocate
 _VEIL_DEFINE_IAT_SYMBOL(ExFreeToNPagedLookasideList, _VEIL_IMPL_ExFreeToNPagedLookasideList);
 
 #endif
+
+
+__drv_allocatesMem(Mem)
+_Must_inspect_result_
+_IRQL_requires_max_(DISPATCH_LEVEL)
+inline
+PVOID
+#pragma warning(suppress: 28195) // memory is not always allocated here, sometimes we reuse an entry from the list
+_VEIL_IMPL_ExAllocateFromLookasideListEx(
+    _Inout_ PLOOKASIDE_LIST_EX Lookaside
+)
+
+/*++
+
+Routine Description:
+
+    This function removes (pops) the first entry from the specified
+    lookaside list.
+
+Arguments:
+
+    Lookaside - Supplies a pointer to a LOOKASIDE_LIST_EX structure.
+
+Return Value:
+
+    If an entry is removed from the specified lookaside list, then the
+    address of the entry is returned as the function value. Otherwise,
+    NULL is returned.
+
+--*/
+
+{
+
+    PVOID Entry;
+
+    Lookaside->L.TotalAllocates += 1;
+    Entry = InterlockedPopEntrySList(&Lookaside->L.ListHead);
+    if (Entry == NULL) {
+        Lookaside->L.AllocateMisses += 1;
+        Entry = (Lookaside->L.AllocateEx)(Lookaside->L.Type,
+            Lookaside->L.Size,
+            Lookaside->L.Tag,
+            Lookaside);
+    }
+
+    return Entry;
+}
+
+_IRQL_requires_max_(DISPATCH_LEVEL)
+inline
+VOID
+_VEIL_IMPL_ExFreeToLookasideListEx(
+    _Inout_ PLOOKASIDE_LIST_EX Lookaside,
+    _In_ __drv_freesMem(Entry) PVOID Entry
+)
+
+/*++
+
+Routine Description:
+
+    This function inserts (pushes) the specified entry into the specified
+    lookaside list.
+
+Arguments:
+
+    Lookaside - Supplies a pointer to a LOOKASIDE_LIST_EX structure.
+
+    Entry - Supples a pointer to the entry that is inserted in the
+        lookaside list.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    Lookaside->L.TotalFrees += 1;
+    if (ExQueryDepthSList(&Lookaside->L.ListHead) >= Lookaside->L.Depth) {
+        Lookaside->L.FreeMisses += 1;
+        (Lookaside->L.FreeEx)(Entry, Lookaside);
+
+    }
+    else {
+        InterlockedPushEntrySList(&Lookaside->L.ListHead, (PSLIST_ENTRY)Entry);
+    }
+
+    return;
+}
+
+#if defined _M_IX86
+
+_VEIL_DEFINE_IAT_RAW_SYMBOL(ExAllocateFromLookasideListEx@4, _VEIL_IMPL_ExAllocateFromLookasideListEx);
+_VEIL_DEFINE_IAT_RAW_SYMBOL(ExFreeToLookasideListEx@8, _VEIL_IMPL_ExFreeToLookasideListEx);
+
+#elif defined _M_X64 || defined _M_ARM || defined _M_ARM64
+
+_VEIL_DEFINE_IAT_SYMBOL(ExAllocateFromLookasideListEx, _VEIL_IMPL_ExAllocateFromLookasideListEx);
+_VEIL_DEFINE_IAT_SYMBOL(ExFreeToLookasideListEx, _VEIL_IMPL_ExFreeToLookasideListEx);
+
+#endif
+
 
 #endif // (NTDDI_VERSION >= NTDDI_WIN10_NI)
 
